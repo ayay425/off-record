@@ -301,6 +301,12 @@ export default function Home() {
         </div>
       </div>
 
+      <div style={{ borderTop: "1px solid var(--border)", padding: "20px 24px", marginTop: 40, display: "flex", justifyContent: "center", gap: 24 }}>
+        <a href="/privacy" style={{ fontSize: 12, color: "var(--text-muted)", textDecoration: "none" }}>privacy</a>
+        <a href="/terms" style={{ fontSize: 12, color: "var(--text-muted)", textDecoration: "none" }}>terms</a>
+        <a href="mailto:hello@off-record.app" style={{ fontSize: 12, color: "var(--text-muted)", textDecoration: "none" }}>contact</a>
+      </div>
+
       {showModal && (
         <div style={c.overlay} onClick={e => e.target === e.currentTarget && setShowModal(false)}>
           <div style={c.modal}>
