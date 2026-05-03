@@ -64,7 +64,7 @@ export default function Home() {
     query = sort === 'top'
       ? query.order('same_count', { ascending: false })
       : query.order('created_at', { ascending: false })
-    const { data } = await query.limit(50)
+    const { data } = await query.limit(1000)
     if (data) { setPosts(data as Post[]); setTotalToday(data.length) }
   }
 
