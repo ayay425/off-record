@@ -164,7 +164,7 @@ export default function Home() {
     replyToggle: { marginLeft: 'auto', padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'none', color: 'var(--text-muted)', fontSize: 12, fontWeight: 500, cursor: 'pointer' },
     repliesWrap: { marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column' as const, gap: 8 },
     replyItem: { background: 'var(--surface2)', borderRadius: 6, padding: '10px 14px' },
-    replyWho: { fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4, letterSpacing: '0.06em', textTransform: 'uppercase' as const },
+    replyWho: { fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', marginBottom: 4 },
     replyText: { fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6 },
     replyRow: { display: 'flex', gap: 6 },
     replyInput: { flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', color: 'var(--text)', fontSize: 13, outline: 'none' },
