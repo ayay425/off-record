@@ -298,6 +298,11 @@ export default function Home() {
               </div>
             ))}
           </div>
+          <div style={{ marginTop: 8, paddingTop: 16, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 4 }}>
+            <a href="/privacy" style={{ fontSize: 12, color: "var(--text-muted)", textDecoration: "none", padding: "4px 8px" }}>privacy</a>
+            <a href="/terms" style={{ fontSize: 12, color: "var(--text-muted)", textDecoration: "none", padding: "4px 8px" }}>terms</a>
+            <a href="mailto:hello@off-record.app" style={{ fontSize: 12, color: "var(--text-muted)", textDecoration: "none", padding: "4px 8px" }}>contact</a>
+          </div>
         </div>
       </div>
 
