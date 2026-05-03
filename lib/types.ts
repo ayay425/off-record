@@ -33,4 +33,4 @@ export interface DailyQuestion {
   date: string
 }
 
-export type Topic = 'all' | 'relationships' | 'loneliness' | 'work' | 'family' | 'identity' | 'loss'
+export type Topic = 'all' | 'relationships' | 'loneliness' | 'work' | 'family' | 'identity' | 'loss' | 'other'
