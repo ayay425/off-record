@@ -1,6 +1,10 @@
+export type Topic = 'all' | 'relationships' | 'loneliness' | 'work' | 'family' | 'identity' | 'loss' | 'other'
+
 export interface Profile {
   id: string
   username: string
+  display_name?: string
+  rename_count?: number
   created_at: string
 }
 
@@ -8,14 +12,14 @@ export interface Post {
   id: string
   user_id: string
   content: string
-  topic: string
+  topic: Topic
   is_question_response: boolean
   same_count: number
   damn_count: number
   reply_count: number
   created_at: string
-  profiles?: Profile
   user_reaction?: 'same' | 'damn' | null
+  profiles?: Profile
 }
 
 export interface Reply {
@@ -24,7 +28,6 @@ export interface Reply {
   user_id: string
   content: string
   created_at: string
-  parent_reply_id?: string | null
   profiles?: Profile
 }
 
@@ -32,6 +35,5 @@ export interface DailyQuestion {
   id: string
   question: string
   date: string
+  created_at: string
 }
-
-export type Topic = 'all' | 'relationships' | 'loneliness' | 'work' | 'family' | 'identity' | 'loss' | 'other'
