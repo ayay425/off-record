@@ -2,23 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap');
-
 :root {
-  --bg: #0a0908;
-  --surface: #111010;
-  --surface2: #181614;
-  --surface3: #201e1c;
-  --border: #2a2724;
-  --border2: #353028;
-  --text: #ede8e0;
-  --text-dim: #9a9088;
-  --text-muted: #5a5248;
-  --accent: #8b1a2a;
-  --accent-hover: #a01f31;
-  --accent-dim: rgba(139,26,42,0.12);
-  --serif: 'Playfair Display', Georgia, serif;
-  --sans: 'DM Sans', -apple-system, sans-serif;
+  --bg: #0c0c0c;
+  --surface: #141414;
+  --surface2: #1c1c1c;
+  --surface3: #242424;
+  --border: #282828;
+  --border2: #323232;
+  --text: #e4e4e4;
+  --text-dim: #888888;
+  --text-muted: #484848;
+  --accent: #c0392b;
+  --accent-dim: rgba(192,57,43,0.1);
+  --mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --sans: 'IBM Plex Sans', -apple-system, sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -33,9 +30,7 @@ body {
 }
 
 textarea, input, button, select { font-family: var(--sans); }
-
 ::selection { background: var(--accent); color: #fff; }
-
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
