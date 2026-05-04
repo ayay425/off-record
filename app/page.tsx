@@ -39,6 +39,7 @@ export default function Home() {
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set())
   const [replies, setReplies] = useState<Record<string, Reply[]>>({})
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
+  const [replyingTo, setReplyingTo] = useState<Record<string, string | null>>({})
   const [showModal, setShowModal] = useState(false)
   const [posting, setPosting] = useState(false)
   const [totalToday, setTotalToday] = useState(0)
@@ -122,10 +123,12 @@ export default function Home() {
     if (!user) { setShowModal(true); return }
     const content = replyInputs[postId]?.trim()
     if (!content) return
-    const { data } = await supabase.from('replies').insert({ post_id: postId, user_id: user.id, content }).select('*, profiles(username)').single()
+    const parentId = replyingTo[postId] || null
+    const { data } = await supabase.from('replies').insert({ post_id: postId, user_id: user.id, content, parent_reply_id: parentId }).select('*, profiles(username)').single()
     if (data) {
       setReplies(prev => ({ ...prev, [postId]: [...(prev[postId] || []), data as Reply] }))
       setReplyInputs(prev => ({ ...prev, [postId]: '' }))
+      setReplyingTo(prev => ({ ...prev, [postId]: null }))
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, reply_count: p.reply_count + 1 } : p))
     }
   }
@@ -260,13 +263,16 @@ export default function Home() {
                 {expandedReplies.has(post.id) && (
                   <div style={c.repliesWrap}>
                     {(replies[post.id] || []).map(r => (
-                      <div key={r.id} style={c.replyItem}>
-                        <div style={c.replyWho}>{r.profiles?.username}</div>
+                      <div key={r.id} style={{ ...c.replyItem, marginLeft: r.parent_reply_id ? 24 : 0, borderLeft: r.parent_reply_id ? '2px solid var(--border2)' : 'none' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <div style={c.replyWho}>{r.profiles?.username}</div>
+                          <button onClick={() => setReplyingTo(prev => ({ ...prev, [post.id]: prev[post.id] === r.id ? null : r.id }))} style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>reply</button>
+                        </div>
                         <div style={c.replyText}>{r.content}</div>
                       </div>
                     ))}
                     <div style={c.replyRow}>
-                      <input style={c.replyInput} placeholder="reply..." value={replyInputs[post.id] || ''} onChange={e => setReplyInputs(p => ({ ...p, [post.id]: e.target.value }))} onKeyDown={e => e.key === 'Enter' && submitReply(post.id)} />
+                      <input style={c.replyInput} placeholder={replyingTo[post.id] ? 'replying...' : 'reply...'} value={replyInputs[post.id] || ''} onChange={e => setReplyInputs(p => ({ ...p, [post.id]: e.target.value }))} onKeyDown={e => e.key === 'Enter' && submitReply(post.id)} />
                       <button style={c.btnPrimary} onClick={() => submitReply(post.id)}>send</button>
                     </div>
                   </div>

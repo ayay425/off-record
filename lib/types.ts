@@ -24,6 +24,7 @@ export interface Reply {
   user_id: string
   content: string
   created_at: string
+  parent_reply_id?: string | null
   profiles?: Profile
 }
 
