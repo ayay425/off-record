@@ -95,7 +95,7 @@ export default function Home() {
   async function loadMore() { loadPosts(offset, topic, sort, search) }
 
   async function signInWithGoogle() {
-    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + '/setup' } })
   }
 
   async function saveUsername() {
