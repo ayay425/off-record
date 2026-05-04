@@ -178,25 +178,52 @@ export default function Home() {
 
   async function toggleReplies(postId: string) {
     const next = new Set(expandedReplies)
-    if (next.has(postId)) { next.delete(postId) } else {
-      next.add(postId)
-      if (!replies[postId]) {
-        const { data } = await supabase.from('replies').select('*, profiles(username)').eq('post_id', postId).order('created_at')
-        if (data) setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
+    if (next.has(postId)) {
+      next.delete(postId)
+      setExpandedReplies(next)
+      return
+    }
+    
+    next.add(postId)
+    setExpandedReplies(next)
+    
+    if (!replies[postId]) {
+      const { data } = await supabase
+        .from('replies')
+        .select('*, profiles(username)')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true })
+      
+      if (data) {
+        setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
       }
     }
-    setExpandedReplies(next)
   }
 
   async function submitReply(postId: string) {
     if (!user) { setShowModal(true); return }
     const content = replyInputs[postId]?.trim()
     if (!content) return
-    await supabase.from('replies').insert({ post_id: postId, user_id: user.id, content })
+    
+    const { data, error } = await supabase
+      .from('replies')
+      .insert({ post_id: postId, user_id: user.id, content })
+      .select('*, profiles(username)')
+      .single()
+    
+    if (error) {
+      console.error('Reply error:', error)
+      return
+    }
+    
+    const currentReplies = replies[postId] || []
+    setReplies(prev => ({ ...prev, [postId]: [...currentReplies, data as Reply] }))
+    
     setReplyInputs(prev => ({ ...prev, [postId]: '' }))
-    await loadPosts()
-    const { data } = await supabase.from('replies').select('*, profiles(username)').eq('post_id', postId).order('created_at')
-    if (data) setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
+    
+    setPosts(prev => prev.map(p => 
+      p.id === postId ? { ...p, reply_count: (p.reply_count || 0) + 1 } : p
+    ))
   }
 
   const c = {
