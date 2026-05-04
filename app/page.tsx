@@ -58,7 +58,7 @@ export default function Home() {
   useEffect(() => { if (offset === 0 && posts.length === 0) loadPosts(0) }, [offset, posts.length])
 
   async function loadQuestion() {
-    const today = new Date().toISOString().split('T')[0]
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })
     const { data } = await supabase.from('daily_questions').select('*').eq('date', today).single()
     if (data) setQuestion(data)
   }
