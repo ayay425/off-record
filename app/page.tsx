@@ -39,13 +39,11 @@ export default function Home() {
   const [replies, setReplies] = useState<Record<string, Reply[]>>({})
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
   const [showModal, setShowModal] = useState(false)
-  const [posting, setPosting] = useState(false)
-  const [totalToday, setTotalToday] = useState(0)
-
-  // Username modal states
   const [showUsernameModal, setShowUsernameModal] = useState(false)
   const [usernameInput, setUsernameInput] = useState('')
   const [usernameError, setUsernameError] = useState('')
+  const [posting, setPosting] = useState(false)
+  const [totalToday, setTotalToday] = useState(0)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
