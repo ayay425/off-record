@@ -48,8 +48,14 @@ export default function Home() {
   const PAGE_SIZE = 20
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user))
-    supabase.auth.onAuthStateChange((_, session) => setUser(session?.user ?? null))
+    async function checkUser(u: any) {
+      setUser(u)
+      if (!u) return
+      const { data: profile } = await supabase.from('profiles').select('username').eq('id', u.id).single()
+      if (!profile?.username) setShowUsernameModal(true)
+    }
+    supabase.auth.getUser().then(({ data }) => checkUser(data.user))
+    supabase.auth.onAuthStateChange((_, session) => checkUser(session?.user ?? null))
     loadQuestion()
     loadPosts(0)
   }, [])
