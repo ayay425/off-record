@@ -44,37 +44,42 @@ export default function Home() {
   const [usernameError, setUsernameError] = useState('')
   const [posting, setPosting] = useState(false)
   const [totalToday, setTotalToday] = useState(0)
-  const [hasCheckedUsername, setHasCheckedUsername] = useState(false)
+  const [needsUsername, setNeedsUsername] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        setUser(data.user)
-        checkAndPromptUsername(data.user.id)
-      }
+      if (data.user) setUser(data.user)
     })
     supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null)
-      if (session?.user) {
-        checkAndPromptUsername(session.user.id)
-      }
     })
+    loadPosts()
     loadQuestion()
   }, [])
 
-  useEffect(() => { loadPosts() }, [topic, sort, search])
+  useEffect(() => {
+    loadPosts()
+  }, [topic, sort, search])
 
-  async function checkAndPromptUsername(userId: string) {
+  useEffect(() => {
+    if (user) {
+      checkUsername()
+    }
+  }, [user])
+
+  async function checkUsername() {
+    if (!user) return
     const { data } = await supabase
       .from('profiles')
       .select('display_name')
-      .eq('id', userId)
+      .eq('id', user.id)
       .single()
-    
     if (!data?.display_name) {
+      setNeedsUsername(true)
       setShowUsernameModal(true)
+    } else {
+      setNeedsUsername(false)
     }
-    setHasCheckedUsername(true)
   }
 
   async function saveUsername() {
@@ -83,7 +88,7 @@ export default function Home() {
       return
     }
     if (!/^[a-zA-Z0-9]+$/.test(tempUsername)) {
-      setUsernameError('Use only letters and numbers, no spaces or underscores')
+      setUsernameError('Use only letters and numbers')
       return
     }
     if (tempUsername.length < 3 || tempUsername.length > 20) {
@@ -98,14 +103,15 @@ export default function Home() {
 
     if (error) {
       if (error.code === '23505') {
-        setUsernameError('Username already taken, try another')
+        setUsernameError('Username already taken')
       } else {
-        setUsernameError('Something went wrong, try again')
+        setUsernameError('Something went wrong')
       }
       return
     }
 
     setShowUsernameModal(false)
+    setNeedsUsername(false)
     setTempUsername('')
     setUsernameError('')
   }
@@ -120,15 +126,7 @@ export default function Home() {
     let query = supabase
       .from('posts')
       .select(`
-        id,
-        content,
-        topic,
-        same_count,
-        damn_count,
-        reply_count,
-        created_at,
-        user_id,
-        is_question_response,
+        *,
         profiles (
           display_name,
           username
@@ -152,7 +150,7 @@ export default function Home() {
     }
     
     if (data) {
-      setPosts(data as unknown as Post[])
+      setPosts(data as Post[])
       setTotalToday(data.length)
     }
   }
@@ -163,24 +161,23 @@ export default function Home() {
 
   async function submitPost() {
     if (!user) { setShowModal(true); return }
+    if (needsUsername) { setShowUsernameModal(true); return }
     const content = composerMode === 'free' ? freeText : questionText
     if (!content.trim()) return
     setPosting(true)
-    const { data } = await supabase.from('posts').insert({
+    await supabase.from('posts').insert({
       user_id: user.id,
       content: content.trim(),
       topic: composerMode === 'free' ? freeTopic : 'general',
       is_question_response: composerMode === 'question',
-    }).select()
-    if (data) {
-      loadPosts()
-      composerMode === 'free' ? setFreeText('') : setQuestionText('')
-    }
+    })
+    loadPosts()
+    composerMode === 'free' ? setFreeText('') : setQuestionText('')
     setPosting(false)
   }
 
   async function toggleReaction(postId: string, type: 'same' | 'damn') {
-    if (!user) return
+    if (!user) { setShowModal(true); return }
     const post = posts.find(p => p.id === postId)
     if (!post) return
     const key = `${type}_count` as 'same_count' | 'damn_count'
@@ -211,12 +208,11 @@ export default function Home() {
     if (!user) { setShowModal(true); return }
     const content = replyInputs[postId]?.trim()
     if (!content) return
-    const { data } = await supabase.from('replies').insert({ post_id: postId, user_id: user.id, content }).select('*, profiles(display_name, username)').single()
-    if (data) {
-      setReplies(prev => ({ ...prev, [postId]: [...(prev[postId] || []), data as Reply] }))
-      setReplyInputs(prev => ({ ...prev, [postId]: '' }))
-      loadPosts()
-    }
+    await supabase.from('replies').insert({ post_id: postId, user_id: user.id, content })
+    setReplyInputs(prev => ({ ...prev, [postId]: '' }))
+    loadPosts()
+    const { data } = await supabase.from('replies').select('*, profiles(display_name, username)').eq('post_id', postId).order('created_at')
+    if (data) setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
   }
 
   const c = {
@@ -269,10 +265,6 @@ export default function Home() {
     groupC: { fontSize: 11, color: 'var(--text-muted)' },
     overlay: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99, padding: 20 },
     modal: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 32, maxWidth: 360, width: '100%' },
-  }
-
-  if (!hasCheckedUsername) {
-    return null
   }
 
   return (
@@ -337,7 +329,7 @@ export default function Home() {
             {posts.map((post: any) => (
               <div key={post.id} style={c.post}>
                 <div style={c.postMeta}>
-                  <span style={c.postId}>{post.profiles?.display_name || post.profiles?.username} · {timeAgo(post.created_at)}</span>
+                  <span style={c.postId}>{post.profiles?.display_name || post.profiles?.username || 'anonymous'} · {timeAgo(post.created_at)}</span>
                   <span style={c.postTag}>{post.topic}</span>
                 </div>
                 <div style={c.postBody}>{post.content}</div>
@@ -354,7 +346,7 @@ export default function Home() {
                   <div style={c.repliesWrap}>
                     {(replies[post.id] || []).map(r => (
                       <div key={r.id} style={c.replyItem}>
-                        <div style={c.replyWho}>{r.profiles?.display_name || r.profiles?.username}</div>
+                        <div style={c.replyWho}>{r.profiles?.display_name || r.profiles?.username || 'anonymous'}</div>
                         <div style={c.replyText}>{r.content}</div>
                       </div>
                     ))}
@@ -414,7 +406,7 @@ export default function Home() {
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>choose a username</div>
             <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>what should we call you?</div>
             <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 20, lineHeight: 1.6 }}>
-              letters and numbers only. no spaces or underscores.<br />
+              letters and numbers only.<br />
               like `alex92` or `chicagodad`
             </div>
             <input
