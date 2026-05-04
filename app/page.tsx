@@ -39,25 +39,53 @@ export default function Home() {
   const [replies, setReplies] = useState<Record<string, Reply[]>>({})
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
   const [showModal, setShowModal] = useState(false)
-  const [showUsernameModal, setShowUsernameModal] = useState(false)
-  const [usernameInput, setUsernameInput] = useState('')
-  const [usernameError, setUsernameError] = useState('')
   const [posting, setPosting] = useState(false)
   const [totalToday, setTotalToday] = useState(0)
+  const [showUsernamePopup, setShowUsernamePopup] = useState(false)
+
+  // ---------- Username modal (locked, never auto-remove) ----------
+  useEffect(() => {
+    const checkUsername = async () => {
+      if (!user) return
+      const { data } = await supabase.from('profiles').select('username').eq('id', user.id).single()
+      if (!data?.username) setShowUsernamePopup(true)
+      else setShowUsernamePopup(false)
+    }
+    checkUsername()
+  }, [user, supabase])
+
+  const UsernameModal = ({ onClose }: { onClose: () => void }) => {
+    const [username, setUsername] = useState('')
+    const [error, setError] = useState('')
+    const handleSave = async () => {
+      const clean = username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
+      if (!clean) return setError('Username cannot be empty')
+      if (clean.length < 3 || clean.length > 20) return setError('Username must be 3-20 characters')
+      const { error: saveError } = await supabase.from('profiles').upsert({ id: user!.id, username: clean })
+      if (saveError?.code === '23505') setError('Username already taken')
+      else if (saveError) setError('Something went wrong')
+      else onClose()
+    }
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+        <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 12, padding: 32, maxWidth: 360, width: '100%' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', marginBottom: 10, color: '#888' }}>choose a username</div>
+          <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: '#fff' }}>what should we call you?</div>
+          <div style={{ fontSize: 13, marginBottom: 20, lineHeight: 1.6, color: '#aaa' }}>letters, numbers, dots, dashes, underscores. <br />like `alex92` or `chicago_dad`</div>
+          <input style={{ width: '100%', background: '#2a2a2a', border: '1px solid #444', borderRadius: 6, padding: '10px 14px', color: '#fff', marginBottom: 12 }} placeholder="username" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} />
+          {error && <div style={{ color: '#ff6b6b', marginBottom: 12 }}>{error}</div>}
+          <button style={{ width: '100%', padding: 12, background: '#ac2b1f', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer' }} onClick={handleSave}>continue</button>
+        </div>
+      </div>
+    )
+  }
+  // ----------------------------------------------------------------
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        setUser(data.user)
-        checkUsername(data.user.id)
-      }
+      if (data.user) setUser(data.user)
     })
-    supabase.auth.onAuthStateChange((_, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        checkUsername(session.user.id)
-      }
-    })
+    supabase.auth.onAuthStateChange((_, session) => setUser(session?.user ?? null))
     loadPosts()
     loadQuestion()
   }, [])
@@ -66,44 +94,6 @@ export default function Home() {
     loadPosts()
   }, [topic, sort, search])
 
-  async function checkUsername(userId: string) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('id', userId)
-      .single()
-    
-    if (!data?.username) {
-      setShowUsernameModal(true)
-    }
-  }
-
-  async function saveUsername() {
-    const clean = usernameInput.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
-    if (!clean) {
-      setUsernameError('Username cannot be empty')
-      return
-    }
-    if (clean.length < 3 || clean.length > 20) {
-      setUsernameError('Username must be 3-20 characters')
-      return
-    }
-    
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({ id: user!.id, username: clean })
-    
-    if (error) {
-      if (error.code === '23505') setUsernameError('Username already taken')
-      else setUsernameError('Something went wrong')
-      return
-    }
-    
-    setShowUsernameModal(false)
-    setUsernameInput('')
-    setUsernameError('')
-  }
-
   async function loadQuestion() {
     const today = new Date().toISOString().split('T')[0]
     const { data } = await supabase.from('daily_questions').select('*').eq('date', today).single()
@@ -111,26 +101,13 @@ export default function Home() {
   }
 
   async function loadPosts() {
-    let query = supabase
-      .from('posts')
-      .select('*, profiles(username)')
-
+    let query = supabase.from('posts').select('*, profiles(username)')
     if (topic !== 'all') query = query.eq('topic', topic)
     if (search) query = query.ilike('content', `%${search}%`)
-
-    if (sort === 'top') {
-      query = query.order('same_count', { ascending: false })
-    } else {
-      query = query.order('created_at', { ascending: false })
-    }
-
+    if (sort === 'top') query = query.order('same_count', { ascending: false })
+    else query = query.order('created_at', { ascending: false })
     const { data, error } = await query
-
-    if (error) {
-      console.error('Error loading posts:', error)
-      return
-    }
-
+    if (error) console.error('Error loading posts:', error)
     if (data) {
       setPosts(data as Post[])
       setTotalToday(data.length)
@@ -138,10 +115,7 @@ export default function Home() {
   }
 
   async function signInWithGoogle() {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin }
-    })
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
   }
 
   async function submitPost() {
@@ -150,8 +124,7 @@ export default function Home() {
     if (!content.trim()) return
     setPosting(true)
     await supabase.from('posts').insert({
-      user_id: user.id,
-      content: content.trim(),
+      user_id: user.id, content: content.trim(),
       topic: composerMode === 'free' ? freeTopic : 'general',
       is_question_response: composerMode === 'question',
     })
@@ -165,7 +138,6 @@ export default function Home() {
     const post = posts.find(p => p.id === postId)
     if (!post) return
     const key = `${type}_count` as 'same_count' | 'damn_count'
-
     if ((post as any).user_reaction === type) {
       await supabase.from('reactions').delete().eq('post_id', postId).eq('user_id', user.id).eq('reaction_type', type)
       await supabase.from('posts').update({ [key]: Math.max(0, (post[key] as number) - 1) }).eq('id', postId)
@@ -178,25 +150,12 @@ export default function Home() {
 
   async function toggleReplies(postId: string) {
     const next = new Set(expandedReplies)
-    if (next.has(postId)) {
-      next.delete(postId)
-      setExpandedReplies(next)
-      return
-    }
-    
+    if (next.has(postId)) { next.delete(postId); setExpandedReplies(next); return }
     next.add(postId)
     setExpandedReplies(next)
-    
     if (!replies[postId]) {
-      const { data } = await supabase
-        .from('replies')
-        .select('*, profiles(username)')
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true })
-      
-      if (data) {
-        setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
-      }
+      const { data } = await supabase.from('replies').select('*, profiles(username)').eq('post_id', postId).order('created_at', { ascending: true })
+      if (data) setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
     }
   }
 
@@ -204,26 +163,12 @@ export default function Home() {
     if (!user) { setShowModal(true); return }
     const content = replyInputs[postId]?.trim()
     if (!content) return
-    
-    const { data, error } = await supabase
-      .from('replies')
-      .insert({ post_id: postId, user_id: user.id, content })
-      .select('*, profiles(username)')
-      .single()
-    
-    if (error) {
-      console.error('Reply error:', error)
-      return
-    }
-    
+    const { data, error } = await supabase.from('replies').insert({ post_id: postId, user_id: user.id, content }).select('*, profiles(username)').single()
+    if (error) { console.error('Reply error:', error); return }
     const currentReplies = replies[postId] || []
     setReplies(prev => ({ ...prev, [postId]: [...currentReplies, data as Reply] }))
-    
     setReplyInputs(prev => ({ ...prev, [postId]: '' }))
-    
-    setPosts(prev => prev.map(p => 
-      p.id === postId ? { ...p, reply_count: (p.reply_count || 0) + 1 } : p
-    ))
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, reply_count: (p.reply_count || 0) + 1 } : p))
   }
 
   const c = {
@@ -289,18 +234,16 @@ export default function Home() {
           <input style={c.searchInput} placeholder="search..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div style={c.navBtns}>
-          {user
-            ? <button style={c.btnGhost} onClick={() => supabase.auth.signOut()}>sign out</button>
-            : <><button style={c.btnGhost} onClick={() => setShowModal(true)}>sign in</button>
-               <button style={c.btnPrimary} onClick={() => setShowModal(true)}>join</button></>
-          }
+          {user ? <button style={c.btnGhost} onClick={() => supabase.auth.signOut()}>sign out</button> : <>
+            <button style={c.btnGhost} onClick={() => setShowModal(true)}>sign in</button>
+            <button style={c.btnPrimary} onClick={() => setShowModal(true)}>join</button>
+          </>}
         </div>
       </div>
 
       <div style={c.main}>
         <div>
           <h1 style={c.h1}>say the thing.</h1>
-
           <div style={c.composer}>
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
               <button style={c.ctab(composerMode === 'free')} onClick={() => setComposerMode('free')}>post something</button>
@@ -415,37 +358,13 @@ export default function Home() {
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>welcome</div>
             <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>why are you here?</div>
             <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 20, lineHeight: 1.6 }}>no judgment. stays private.</div>
-            <button style={{ ...c.btnPrimary, width: '100%', padding: 12, fontSize: 14, borderRadius: 8, marginBottom: 12 }} onClick={signInWithGoogle}>
-              continue with Google
-            </button>
+            <button style={{ ...c.btnPrimary, width: '100%', padding: 12, fontSize: 14, borderRadius: 8, marginBottom: 12 }} onClick={signInWithGoogle}>continue with Google</button>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>no real name shown · ever</div>
           </div>
         </div>
       )}
 
-      {showUsernameModal && (
-        <div style={c.overlay}>
-          <div style={c.modal}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>choose a username</div>
-            <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>what should we call you?</div>
-            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 20, lineHeight: 1.6 }}>
-              letters, numbers, dots, dashes, underscores.<br />
-              like `alex92` or `chicago_dad`
-            </div>
-            <input
-              style={{ ...c.textarea, minHeight: 44, marginBottom: 12 }}
-              placeholder="username"
-              value={usernameInput}
-              onChange={e => setUsernameInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && saveUsername()}
-            />
-            {usernameError && <div style={{ color: '#ff6b6b', fontSize: 12, marginBottom: 12 }}>{usernameError}</div>}
-            <button style={{ ...c.btnPrimary, width: '100%', padding: 12 }} onClick={saveUsername}>
-              continue
-            </button>
-          </div>
-        </div>
-      )}
+      {showUsernamePopup && <UsernameModal onClose={() => setShowUsernamePopup(false)} />}
     </div>
   )
 }
