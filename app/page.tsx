@@ -64,7 +64,7 @@ export default function Home() {
   }, [])
 
   useEffect(() => { setOffset(0); setPosts([]); setHasMore(true) }, [topic, sort, search])
-  useEffect(() => { if (offset === 0 && posts.length === 0) loadPosts(0) }, [offset, posts.length])
+  useEffect(() => { loadPosts(0) }, [topic, sort, search])
 
   async function loadQuestion() {
     const today = new Date().toISOString().split('T')[0]
