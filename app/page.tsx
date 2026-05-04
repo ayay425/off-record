@@ -117,8 +117,6 @@ export default function Home() {
   }
 
   async function loadPosts() {
-    console.log('Loading posts...')
-    
     let query = supabase
       .from('posts')
       .select(`
@@ -129,6 +127,8 @@ export default function Home() {
         damn_count,
         reply_count,
         created_at,
+        user_id,
+        is_question_response,
         profiles (
           display_name,
           username
@@ -146,16 +146,13 @@ export default function Home() {
     
     const { data, error } = await query
 
-    console.log('Posts query result:', { data, error })
-    
     if (error) {
       console.error('Error loading posts:', error)
       return
     }
     
     if (data) {
-      console.log('Setting posts:', data.length)
-      setPosts(data as Post[])
+      setPosts(data as unknown as Post[])
       setTotalToday(data.length)
     }
   }
@@ -169,15 +166,12 @@ export default function Home() {
     const content = composerMode === 'free' ? freeText : questionText
     if (!content.trim()) return
     setPosting(true)
-    const { data, error } = await supabase.from('posts').insert({
+    const { data } = await supabase.from('posts').insert({
       user_id: user.id,
       content: content.trim(),
       topic: composerMode === 'free' ? freeTopic : 'general',
       is_question_response: composerMode === 'question',
     }).select()
-    if (error) {
-      console.error('Submit error:', error)
-    }
     if (data) {
       loadPosts()
       composerMode === 'free' ? setFreeText('') : setQuestionText('')
@@ -186,19 +180,19 @@ export default function Home() {
   }
 
   async function toggleReaction(postId: string, type: 'same' | 'damn') {
-    if (!user) { setShowModal(true); return }
+    if (!user) return
     const post = posts.find(p => p.id === postId)
     if (!post) return
     const key = `${type}_count` as 'same_count' | 'damn_count'
+    
     if ((post as any).user_reaction === type) {
       await supabase.from('reactions').delete().eq('post_id', postId).eq('user_id', user.id).eq('reaction_type', type)
       await supabase.from('posts').update({ [key]: Math.max(0, (post[key] as number) - 1) }).eq('id', postId)
-      loadPosts()
     } else {
       await supabase.from('reactions').upsert({ post_id: postId, user_id: user.id, reaction_type: type })
       await supabase.from('posts').update({ [key]: (post[key] as number) + 1 }).eq('id', postId)
-      loadPosts()
     }
+    loadPosts()
   }
 
   async function toggleReplies(postId: string) {
