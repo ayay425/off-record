@@ -323,7 +323,7 @@ export default function Home() {
               {[['privacy', '/privacy'], ['terms', '/terms'], ['contact', 'mailto:hello@off-record.app']].map(([label, href]) => (
                 <a key={label} href={href} style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-muted)', textDecoration: 'none' }}>{label}</a>
               ))}
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>© 2025</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>© 2026</span>
             </div>
           </div>
         </div>
