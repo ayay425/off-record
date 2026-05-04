@@ -42,9 +42,24 @@ export default function Home() {
   const [posting, setPosting] = useState(false)
   const [totalToday, setTotalToday] = useState(0)
 
+  // Username modal states
+  const [showUsernameModal, setShowUsernameModal] = useState(false)
+  const [usernameInput, setUsernameInput] = useState('')
+  const [usernameError, setUsernameError] = useState('')
+
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user))
-    supabase.auth.onAuthStateChange((_, session) => setUser(session?.user ?? null))
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setUser(data.user)
+        checkUsername(data.user.id)
+      }
+    })
+    supabase.auth.onAuthStateChange((_, session) => {
+      setUser(session?.user ?? null)
+      if (session?.user) {
+        checkUsername(session.user.id)
+      }
+    })
     loadPosts()
     loadQuestion()
   }, [])
@@ -52,6 +67,44 @@ export default function Home() {
   useEffect(() => {
     loadPosts()
   }, [topic, sort, search])
+
+  async function checkUsername(userId: string) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', userId)
+      .single()
+    
+    if (!data?.username) {
+      setShowUsernameModal(true)
+    }
+  }
+
+  async function saveUsername() {
+    const clean = usernameInput.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
+    if (!clean) {
+      setUsernameError('Username cannot be empty')
+      return
+    }
+    if (clean.length < 3 || clean.length > 20) {
+      setUsernameError('Username must be 3-20 characters')
+      return
+    }
+    
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({ id: user!.id, username: clean })
+    
+    if (error) {
+      if (error.code === '23505') setUsernameError('Username already taken')
+      else setUsernameError('Something went wrong')
+      return
+    }
+    
+    setShowUsernameModal(false)
+    setUsernameInput('')
+    setUsernameError('')
+  }
 
   async function loadQuestion() {
     const today = new Date().toISOString().split('T')[0]
@@ -341,6 +394,30 @@ export default function Home() {
               continue with Google
             </button>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>no real name shown · ever</div>
+          </div>
+        </div>
+      )}
+
+      {showUsernameModal && (
+        <div style={c.overlay}>
+          <div style={c.modal}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>choose a username</div>
+            <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>what should we call you?</div>
+            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 20, lineHeight: 1.6 }}>
+              letters, numbers, dots, dashes, underscores.<br />
+              like `alex92` or `chicago_dad`
+            </div>
+            <input
+              style={{ ...c.textarea, minHeight: 44, marginBottom: 12 }}
+              placeholder="username"
+              value={usernameInput}
+              onChange={e => setUsernameInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && saveUsername()}
+            />
+            {usernameError && <div style={{ color: '#ff6b6b', fontSize: 12, marginBottom: 12 }}>{usernameError}</div>}
+            <button style={{ ...c.btnPrimary, width: '100%', padding: 12 }} onClick={saveUsername}>
+              continue
+            </button>
           </div>
         </div>
       )}
