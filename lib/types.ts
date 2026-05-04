@@ -3,8 +3,6 @@ export type Topic = 'all' | 'relationships' | 'loneliness' | 'work' | 'family' |
 export interface Profile {
   id: string
   username: string
-  display_name?: string
-  rename_count?: number
   created_at: string
 }
 
