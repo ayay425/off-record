@@ -74,7 +74,7 @@ export default function Home() {
       .select('username')
       .eq('id', user.id)
       .single()
-    if (!data?.display_name) {
+    if (!data?.username) {
       setNeedsUsername(true)
       setShowUsernameModal(true)
     } else {
