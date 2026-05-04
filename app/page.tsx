@@ -43,17 +43,23 @@ export default function Home() {
   const [totalToday, setTotalToday] = useState(0)
   const [showUsernamePopup, setShowUsernamePopup] = useState(false)
 
-  // ---------- Username modal (locked, never auto-remove) ----------
+  // ---- 永远检查用户名，自动弹窗 ----
   useEffect(() => {
+    if (!user) return
     const checkUsername = async () => {
-      if (!user) return
-      const { data } = await supabase.from('profiles').select('username').eq('id', user.id).single()
-      if (!data?.username) setShowUsernamePopup(true)
-      else setShowUsernamePopup(false)
+      const { data } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', user.id)
+        .single()
+      if (!data?.username) {
+        setShowUsernamePopup(true)
+      }
     }
     checkUsername()
   }, [user, supabase])
 
+  // ---- 独立用户名弹窗组件（锁死，不会消失） ----
   const UsernameModal = ({ onClose }: { onClose: () => void }) => {
     const [username, setUsername] = useState('')
     const [error, setError] = useState('')
@@ -61,7 +67,9 @@ export default function Home() {
       const clean = username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
       if (!clean) return setError('Username cannot be empty')
       if (clean.length < 3 || clean.length > 20) return setError('Username must be 3-20 characters')
-      const { error: saveError } = await supabase.from('profiles').upsert({ id: user!.id, username: clean })
+      const { error: saveError } = await supabase
+        .from('profiles')
+        .upsert({ id: user!.id, username: clean })
       if (saveError?.code === '23505') setError('Username already taken')
       else if (saveError) setError('Something went wrong')
       else onClose()
@@ -79,7 +87,7 @@ export default function Home() {
       </div>
     )
   }
-  // ----------------------------------------------------------------
+  // -------------------------------------------------------------
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -234,10 +242,14 @@ export default function Home() {
           <input style={c.searchInput} placeholder="search..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div style={c.navBtns}>
-          {user ? <button style={c.btnGhost} onClick={() => supabase.auth.signOut()}>sign out</button> : <>
-            <button style={c.btnGhost} onClick={() => setShowModal(true)}>sign in</button>
-            <button style={c.btnPrimary} onClick={() => setShowModal(true)}>join</button>
-          </>}
+          {user ? (
+            <button style={c.btnGhost} onClick={() => supabase.auth.signOut()}>sign out</button>
+          ) : (
+            <>
+              <button style={c.btnGhost} onClick={() => setShowModal(true)}>sign in</button>
+              <button style={c.btnPrimary} onClick={() => setShowModal(true)}>join</button>
+            </>
+          )}
         </div>
       </div>
 
@@ -262,7 +274,12 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  {question && <><div style={c.qLabel}>today&apos;s question</div><div style={c.qText}>&ldquo;{question.question}&rdquo;</div></>}
+                  {question && (
+                    <>
+                      <div style={c.qLabel}>today&apos;s question</div>
+                      <div style={c.qText}>&ldquo;{question.question}&rdquo;</div>
+                    </>
+                  )}
                   <textarea style={c.textarea} placeholder="say it." value={questionText} onChange={e => setQuestionText(e.target.value)} />
                   <div style={c.postRow}>
                     <button style={c.btnPrimary} onClick={submitPost}>{posting ? '...' : 'post'}</button>
@@ -281,22 +298,30 @@ export default function Home() {
           </div>
 
           <div style={c.feed}>
-            {posts.length === 0 && <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 14 }}>no posts yet. be the first.</div>}
+            {posts.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 14 }}>no posts yet. be the first.</div>
+            )}
             {posts.map((post: any) => (
               <div key={post.id} style={c.post}>
                 <div style={c.postMeta}>
-                  <span style={c.postId}>{post.profiles?.username || 'anonymous'} · {timeAgo(post.created_at)}</span>
+                  <span style={c.postId}>
+                    {post.profiles?.username || 'anonymous'} · {timeAgo(post.created_at)}
+                  </span>
                   <span style={c.postTag}>{post.topic}</span>
                 </div>
                 <div style={c.postBody}>{post.content}</div>
                 <div style={c.postActions}>
                   <button style={c.react((post as any).user_reaction === 'same')} onClick={() => toggleReaction(post.id, 'same')}>
-                    <span>same</span><span style={{ fontWeight: 600 }}>{post.same_count}</span>
+                    <span>same</span>
+                    <span style={{ fontWeight: 600 }}>{post.same_count}</span>
                   </button>
                   <button style={c.react((post as any).user_reaction === 'damn')} onClick={() => toggleReaction(post.id, 'damn')}>
-                    <span>damn</span><span style={{ fontWeight: 600 }}>{post.damn_count}</span>
+                    <span>damn</span>
+                    <span style={{ fontWeight: 600 }}>{post.damn_count}</span>
                   </button>
-                  <button style={c.replyToggle} onClick={() => toggleReplies(post.id)}>reply · {post.reply_count}</button>
+                  <button style={c.replyToggle} onClick={() => toggleReplies(post.id)}>
+                    reply · {post.reply_count}
+                  </button>
                 </div>
                 {expandedReplies.has(post.id) && (
                   <div style={c.repliesWrap}>
@@ -307,8 +332,16 @@ export default function Home() {
                       </div>
                     ))}
                     <div style={c.replyRow}>
-                      <input style={c.replyInput} placeholder="reply..." value={replyInputs[post.id] || ''} onChange={e => setReplyInputs(p => ({ ...p, [post.id]: e.target.value }))} onKeyDown={e => e.key === 'Enter' && submitReply(post.id)} />
-                      <button style={c.btnPrimary} onClick={() => submitReply(post.id)}>send</button>
+                      <input
+                        style={c.replyInput}
+                        placeholder="reply..."
+                        value={replyInputs[post.id] || ''}
+                        onChange={e => setReplyInputs(p => ({ ...p, [post.id]: e.target.value }))}
+                        onKeyDown={e => e.key === 'Enter' && submitReply(post.id)}
+                      />
+                      <button style={c.btnPrimary} onClick={() => submitReply(post.id)}>
+                        send
+                      </button>
                     </div>
                   </div>
                 )}
@@ -322,13 +355,23 @@ export default function Home() {
             <div style={c.scardTitle}>about</div>
             <div style={c.divider} />
             <p style={c.aboutP}>A space for men to say the things they never say out loud.</p>
-            <p style={{ ...c.aboutP, color: 'var(--text-muted)', fontSize: 12 }}>Everyone's welcome to sit with it.</p>
-            <button style={{ ...c.btnPrimary, width: '100%', marginTop: 10, padding: 9 }} onClick={() => setShowModal(true)}>join</button>
+            <p style={{ ...c.aboutP, color: 'var(--text-muted)', fontSize: 12 }}>
+              Everyone's welcome to sit with it.
+            </p>
+            <button
+              style={{ ...c.btnPrimary, width: '100%', marginTop: 10, padding: 9 }}
+              onClick={() => setShowModal(true)}
+            >
+              join
+            </button>
           </div>
           <div>
             <div style={c.scardTitle}>today</div>
             <div style={c.divider} />
-            <div style={c.statR}><span style={c.statL}>posts</span><span style={c.statV}>{totalToday}</span></div>
+            <div style={c.statR}>
+              <span style={c.statL}>posts</span>
+              <span style={c.statV}>{totalToday}</span>
+            </div>
           </div>
           <div>
             <div style={c.scardTitle}>topics</div>
@@ -343,9 +386,15 @@ export default function Home() {
             <div style={c.scardTitle}>info</div>
             <div style={c.divider} />
             <div style={c.footerLinks}>
-              <a href="/privacy" style={c.link}>privacy</a>
-              <a href="/terms" style={c.link}>terms</a>
-              <a href="/contact" style={c.link}>contact</a>
+              <a href="/privacy" style={c.link}>
+                privacy
+              </a>
+              <a href="/terms" style={c.link}>
+                terms
+              </a>
+              <a href="/contact" style={c.link}>
+                contact
+              </a>
               <span style={{ color: 'var(--text-muted)' }}>© 2026 off record</span>
             </div>
           </div>
@@ -355,11 +404,24 @@ export default function Home() {
       {showModal && (
         <div style={c.overlay} onClick={e => e.target === e.currentTarget && setShowModal(false)}>
           <div style={c.modal}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>welcome</div>
-            <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>why are you here?</div>
-            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 20, lineHeight: 1.6 }}>no judgment. stays private.</div>
-            <button style={{ ...c.btnPrimary, width: '100%', padding: 12, fontSize: 14, borderRadius: 8, marginBottom: 12 }} onClick={signInWithGoogle}>continue with Google</button>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>no real name shown · ever</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>
+              welcome
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>
+              why are you here?
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 20, lineHeight: 1.6 }}>
+              no judgment. stays private.
+            </div>
+            <button
+              style={{ ...c.btnPrimary, width: '100%', padding: 12, fontSize: 14, borderRadius: 8, marginBottom: 12 }}
+              onClick={signInWithGoogle}
+            >
+              continue with Google
+            </button>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
+              no real name shown · ever
+            </div>
           </div>
         </div>
       )}
