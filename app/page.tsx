@@ -43,10 +43,10 @@ export default function Home() {
   const [totalToday, setTotalToday] = useState(0)
   const [showUsernamePopup, setShowUsernamePopup] = useState(false)
 
-  // Fixed username check and popup lock
+  // 🚨 强制检查用户名弹窗 (不会消失)
   useEffect(() => {
     if (!user) return
-    const checkUsername = async () => {
+    const check = async () => {
       const { data } = await supabase
         .from('profiles')
         .select('username')
@@ -56,32 +56,23 @@ export default function Home() {
         setShowUsernamePopup(true)
       }
     }
-    checkUsername()
+    check()
   }, [user, supabase])
 
+  // 独立弹窗组件
   const UsernameModal = ({ onClose }: { onClose: () => void }) => {
     const [username, setUsername] = useState('')
     const [error, setError] = useState('')
     const handleSave = async () => {
       const clean = username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
-      if (!clean) {
-        setError('Username cannot be empty')
-        return
-      }
-      if (clean.length < 3 || clean.length > 20) {
-        setError('Username must be 3-20 characters')
-        return
-      }
+      if (!clean) return setError('Username cannot be empty')
+      if (clean.length < 3 || clean.length > 20) return setError('Username must be 3-20 characters')
       const { error: saveError } = await supabase
         .from('profiles')
         .upsert({ id: user!.id, username: clean })
-      if (saveError?.code === '23505') {
-        setError('Username already taken')
-      } else if (saveError) {
-        setError('Something went wrong')
-      } else {
-        onClose()
-      }
+      if (saveError?.code === '23505') setError('Username already taken')
+      else if (saveError) setError('Something went wrong')
+      else onClose()
     }
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
@@ -89,25 +80,15 @@ export default function Home() {
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', marginBottom: 10, color: '#888' }}>choose a username</div>
           <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: '#fff' }}>what should we call you?</div>
           <div style={{ fontSize: 13, marginBottom: 20, lineHeight: 1.6, color: '#aaa' }}>letters, numbers, dots, dashes, underscores. <br />like `alex92` or `chicago_dad`</div>
-          <input
-            style={{ width: '100%', background: '#2a2a2a', border: '1px solid #444', borderRadius: 6, padding: '10px 14px', color: '#fff', marginBottom: 12 }}
-            placeholder="username"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSave()}
-          />
+          <input style={{ width: '100%', background: '#2a2a2a', border: '1px solid #444', borderRadius: 6, padding: '10px 14px', color: '#fff', marginBottom: 12 }} placeholder="username" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} />
           {error && <div style={{ color: '#ff6b6b', marginBottom: 12 }}>{error}</div>}
-          <button
-            style={{ width: '100%', padding: 12, background: '#ac2b1f', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer' }}
-            onClick={handleSave}
-          >
-            continue
-          </button>
+          <button style={{ width: '100%', padding: 12, background: '#ac2b1f', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer' }} onClick={handleSave}>continue</button>
         </div>
       </div>
     )
   }
 
+  // 初始加载
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUser(data.user)
@@ -151,14 +132,12 @@ export default function Home() {
     if (!content.trim()) return
     setPosting(true)
     await supabase.from('posts').insert({
-      user_id: user.id,
-      content: content.trim(),
+      user_id: user.id, content: content.trim(),
       topic: composerMode === 'free' ? freeTopic : 'general',
       is_question_response: composerMode === 'question',
     })
     await loadPosts()
-    if (composerMode === 'free') setFreeText('')
-    else setQuestionText('')
+    composerMode === 'free' ? setFreeText('') : setQuestionText('')
     setPosting(false)
   }
 
@@ -179,19 +158,11 @@ export default function Home() {
 
   async function toggleReplies(postId: string) {
     const next = new Set(expandedReplies)
-    if (next.has(postId)) {
-      next.delete(postId)
-      setExpandedReplies(next)
-      return
-    }
+    if (next.has(postId)) { next.delete(postId); setExpandedReplies(next); return }
     next.add(postId)
     setExpandedReplies(next)
     if (!replies[postId]) {
-      const { data } = await supabase
-        .from('replies')
-        .select('*, profiles(username)')
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true })
+      const { data } = await supabase.from('replies').select('*, profiles(username)').eq('post_id', postId).order('created_at', { ascending: true })
       if (data) setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
     }
   }
@@ -200,23 +171,12 @@ export default function Home() {
     if (!user) { setShowModal(true); return }
     const content = replyInputs[postId]?.trim()
     if (!content) return
-    const { data, error } = await supabase
-      .from('replies')
-      .insert({ post_id: postId, user_id: user.id, content })
-      .select('*, profiles(username)')
-      .single()
-    if (error) {
-      console.error('Reply error:', error)
-      return
-    }
+    const { data, error } = await supabase.from('replies').insert({ post_id: postId, user_id: user.id, content }).select('*, profiles(username)').single()
+    if (error) { console.error('Reply error:', error); return }
     const currentReplies = replies[postId] || []
     setReplies(prev => ({ ...prev, [postId]: [...currentReplies, data as Reply] }))
     setReplyInputs(prev => ({ ...prev, [postId]: '' }))
-    setPosts(prev =>
-      prev.map(p =>
-        p.id === postId ? { ...p, reply_count: (p.reply_count || 0) + 1 } : p
-      )
-    )
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, reply_count: (p.reply_count || 0) + 1 } : p))
   }
 
   const c = {
