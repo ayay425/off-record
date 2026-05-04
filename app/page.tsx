@@ -43,23 +43,24 @@ export default function Home() {
   const [totalToday, setTotalToday] = useState(0)
   const [showUsernamePopup, setShowUsernamePopup] = useState(false)
 
-  // ---- 永远检查用户名，自动弹窗 ----
+  // Force check username after user is loaded
   useEffect(() => {
     if (!user) return
-    const checkUsername = async () => {
+    const check = async () => {
       const { data } = await supabase
         .from('profiles')
         .select('username')
         .eq('id', user.id)
         .single()
+
+      // 只要没有 username 就弹窗
       if (!data?.username) {
         setShowUsernamePopup(true)
       }
     }
-    checkUsername()
+    check()
   }, [user, supabase])
 
-  // ---- 独立用户名弹窗组件（锁死，不会消失） ----
   const UsernameModal = ({ onClose }: { onClose: () => void }) => {
     const [username, setUsername] = useState('')
     const [error, setError] = useState('')
@@ -87,7 +88,6 @@ export default function Home() {
       </div>
     )
   }
-  // -------------------------------------------------------------
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
