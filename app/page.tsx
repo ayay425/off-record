@@ -43,22 +43,20 @@ export default function Home() {
   const [totalToday, setTotalToday] = useState(0)
   const [showUsernamePopup, setShowUsernamePopup] = useState(false)
 
-  // Force check username after user is loaded
+  // Fixed username check and popup lock
   useEffect(() => {
     if (!user) return
-    const check = async () => {
+    const checkUsername = async () => {
       const { data } = await supabase
         .from('profiles')
         .select('username')
         .eq('id', user.id)
         .single()
-
-      // 只要没有 username 就弹窗
       if (!data?.username) {
         setShowUsernamePopup(true)
       }
     }
-    check()
+    checkUsername()
   }, [user, supabase])
 
   const UsernameModal = ({ onClose }: { onClose: () => void }) => {
@@ -66,14 +64,24 @@ export default function Home() {
     const [error, setError] = useState('')
     const handleSave = async () => {
       const clean = username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
-      if (!clean) return setError('Username cannot be empty')
-      if (clean.length < 3 || clean.length > 20) return setError('Username must be 3-20 characters')
+      if (!clean) {
+        setError('Username cannot be empty')
+        return
+      }
+      if (clean.length < 3 || clean.length > 20) {
+        setError('Username must be 3-20 characters')
+        return
+      }
       const { error: saveError } = await supabase
         .from('profiles')
         .upsert({ id: user!.id, username: clean })
-      if (saveError?.code === '23505') setError('Username already taken')
-      else if (saveError) setError('Something went wrong')
-      else onClose()
+      if (saveError?.code === '23505') {
+        setError('Username already taken')
+      } else if (saveError) {
+        setError('Something went wrong')
+      } else {
+        onClose()
+      }
     }
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
@@ -81,9 +89,20 @@ export default function Home() {
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', marginBottom: 10, color: '#888' }}>choose a username</div>
           <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: '#fff' }}>what should we call you?</div>
           <div style={{ fontSize: 13, marginBottom: 20, lineHeight: 1.6, color: '#aaa' }}>letters, numbers, dots, dashes, underscores. <br />like `alex92` or `chicago_dad`</div>
-          <input style={{ width: '100%', background: '#2a2a2a', border: '1px solid #444', borderRadius: 6, padding: '10px 14px', color: '#fff', marginBottom: 12 }} placeholder="username" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} />
+          <input
+            style={{ width: '100%', background: '#2a2a2a', border: '1px solid #444', borderRadius: 6, padding: '10px 14px', color: '#fff', marginBottom: 12 }}
+            placeholder="username"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSave()}
+          />
           {error && <div style={{ color: '#ff6b6b', marginBottom: 12 }}>{error}</div>}
-          <button style={{ width: '100%', padding: 12, background: '#ac2b1f', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer' }} onClick={handleSave}>continue</button>
+          <button
+            style={{ width: '100%', padding: 12, background: '#ac2b1f', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer' }}
+            onClick={handleSave}
+          >
+            continue
+          </button>
         </div>
       </div>
     )
@@ -132,12 +151,14 @@ export default function Home() {
     if (!content.trim()) return
     setPosting(true)
     await supabase.from('posts').insert({
-      user_id: user.id, content: content.trim(),
+      user_id: user.id,
+      content: content.trim(),
       topic: composerMode === 'free' ? freeTopic : 'general',
       is_question_response: composerMode === 'question',
     })
     await loadPosts()
-    composerMode === 'free' ? setFreeText('') : setQuestionText('')
+    if (composerMode === 'free') setFreeText('')
+    else setQuestionText('')
     setPosting(false)
   }
 
@@ -158,11 +179,19 @@ export default function Home() {
 
   async function toggleReplies(postId: string) {
     const next = new Set(expandedReplies)
-    if (next.has(postId)) { next.delete(postId); setExpandedReplies(next); return }
+    if (next.has(postId)) {
+      next.delete(postId)
+      setExpandedReplies(next)
+      return
+    }
     next.add(postId)
     setExpandedReplies(next)
     if (!replies[postId]) {
-      const { data } = await supabase.from('replies').select('*, profiles(username)').eq('post_id', postId).order('created_at', { ascending: true })
+      const { data } = await supabase
+        .from('replies')
+        .select('*, profiles(username)')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true })
       if (data) setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
     }
   }
@@ -171,12 +200,23 @@ export default function Home() {
     if (!user) { setShowModal(true); return }
     const content = replyInputs[postId]?.trim()
     if (!content) return
-    const { data, error } = await supabase.from('replies').insert({ post_id: postId, user_id: user.id, content }).select('*, profiles(username)').single()
-    if (error) { console.error('Reply error:', error); return }
+    const { data, error } = await supabase
+      .from('replies')
+      .insert({ post_id: postId, user_id: user.id, content })
+      .select('*, profiles(username)')
+      .single()
+    if (error) {
+      console.error('Reply error:', error)
+      return
+    }
     const currentReplies = replies[postId] || []
     setReplies(prev => ({ ...prev, [postId]: [...currentReplies, data as Reply] }))
     setReplyInputs(prev => ({ ...prev, [postId]: '' }))
-    setPosts(prev => prev.map(p => p.id === postId ? { ...p, reply_count: (p.reply_count || 0) + 1 } : p))
+    setPosts(prev =>
+      prev.map(p =>
+        p.id === postId ? { ...p, reply_count: (p.reply_count || 0) + 1 } : p
+      )
+    )
   }
 
   const c = {
@@ -299,7 +339,9 @@ export default function Home() {
 
           <div style={c.feed}>
             {posts.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 14 }}>no posts yet. be the first.</div>
+              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 14 }}>
+                no posts yet. be the first.
+              </div>
             )}
             {posts.map((post: any) => (
               <div key={post.id} style={c.post}>
@@ -311,11 +353,17 @@ export default function Home() {
                 </div>
                 <div style={c.postBody}>{post.content}</div>
                 <div style={c.postActions}>
-                  <button style={c.react((post as any).user_reaction === 'same')} onClick={() => toggleReaction(post.id, 'same')}>
+                  <button
+                    style={c.react((post as any).user_reaction === 'same')}
+                    onClick={() => toggleReaction(post.id, 'same')}
+                  >
                     <span>same</span>
                     <span style={{ fontWeight: 600 }}>{post.same_count}</span>
                   </button>
-                  <button style={c.react((post as any).user_reaction === 'damn')} onClick={() => toggleReaction(post.id, 'damn')}>
+                  <button
+                    style={c.react((post as any).user_reaction === 'damn')}
+                    onClick={() => toggleReaction(post.id, 'damn')}
+                  >
                     <span>damn</span>
                     <span style={{ fontWeight: 600 }}>{post.damn_count}</span>
                   </button>
@@ -336,7 +384,9 @@ export default function Home() {
                         style={c.replyInput}
                         placeholder="reply..."
                         value={replyInputs[post.id] || ''}
-                        onChange={e => setReplyInputs(p => ({ ...p, [post.id]: e.target.value }))}
+                        onChange={e =>
+                          setReplyInputs(p => ({ ...p, [post.id]: e.target.value }))
+                        }
                         onKeyDown={e => e.key === 'Enter' && submitReply(post.id)}
                       />
                       <button style={c.btnPrimary} onClick={() => submitReply(post.id)}>
@@ -377,7 +427,11 @@ export default function Home() {
             <div style={c.scardTitle}>topics</div>
             <div style={c.divider} />
             {TOPICS.map(t => (
-              <div key={t.key} style={c.groupR(topic === t.key)} onClick={() => setTopic(t.key)}>
+              <div
+                key={t.key}
+                style={c.groupR(topic === t.key)}
+                onClick={() => setTopic(t.key)}
+              >
                 <span style={c.groupN(topic === t.key)}>{t.label}</span>
               </div>
             ))}
@@ -386,15 +440,9 @@ export default function Home() {
             <div style={c.scardTitle}>info</div>
             <div style={c.divider} />
             <div style={c.footerLinks}>
-              <a href="/privacy" style={c.link}>
-                privacy
-              </a>
-              <a href="/terms" style={c.link}>
-                terms
-              </a>
-              <a href="/contact" style={c.link}>
-                contact
-              </a>
+              <a href="/privacy" style={c.link}>privacy</a>
+              <a href="/terms" style={c.link}>terms</a>
+              <a href="/contact" style={c.link}>contact</a>
               <span style={{ color: 'var(--text-muted)' }}>© 2026 off record</span>
             </div>
           </div>
@@ -402,19 +450,45 @@ export default function Home() {
       </div>
 
       {showModal && (
-        <div style={c.overlay} onClick={e => e.target === e.currentTarget && setShowModal(false)}>
+        <div
+          style={c.overlay}
+          onClick={e => e.target === e.currentTarget && setShowModal(false)}
+        >
           <div style={c.modal}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                color: 'var(--text-muted)',
+                marginBottom: 10,
+              }}
+            >
               welcome
             </div>
             <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>
               why are you here?
             </div>
-            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 20, lineHeight: 1.6 }}>
+            <div
+              style={{
+                fontSize: 13,
+                color: 'var(--text-dim)',
+                marginBottom: 20,
+                lineHeight: 1.6,
+              }}
+            >
               no judgment. stays private.
             </div>
             <button
-              style={{ ...c.btnPrimary, width: '100%', padding: 12, fontSize: 14, borderRadius: 8, marginBottom: 12 }}
+              style={{
+                ...c.btnPrimary,
+                width: '100%',
+                padding: 12,
+                fontSize: 14,
+                borderRadius: 8,
+                marginBottom: 12,
+              }}
               onClick={signInWithGoogle}
             >
               continue with Google
