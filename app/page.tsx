@@ -44,6 +44,7 @@ export default function Home() {
   const [usernameError, setUsernameError] = useState('')
   const [posting, setPosting] = useState(false)
   const [totalToday, setTotalToday] = useState(0)
+  const [hasCheckedUsername, setHasCheckedUsername] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -70,9 +71,10 @@ export default function Home() {
       .eq('id', userId)
       .single()
     
-    if (!data?.display_name && !showUsernameModal) {
+    if (!data?.display_name) {
       setShowUsernameModal(true)
     }
+    setHasCheckedUsername(true)
   }
 
   async function saveUsername() {
@@ -115,10 +117,18 @@ export default function Home() {
   }
 
   async function loadPosts() {
+    console.log('Loading posts...')
+    
     let query = supabase
       .from('posts')
       .select(`
-        *,
+        id,
+        content,
+        topic,
+        same_count,
+        damn_count,
+        reply_count,
+        created_at,
         profiles (
           display_name,
           username
@@ -136,12 +146,15 @@ export default function Home() {
     
     const { data, error } = await query
 
+    console.log('Posts query result:', { data, error })
+    
     if (error) {
       console.error('Error loading posts:', error)
       return
     }
     
     if (data) {
+      console.log('Setting posts:', data.length)
       setPosts(data as Post[])
       setTotalToday(data.length)
     }
@@ -156,15 +169,17 @@ export default function Home() {
     const content = composerMode === 'free' ? freeText : questionText
     if (!content.trim()) return
     setPosting(true)
-    const { data } = await supabase.from('posts').insert({
+    const { data, error } = await supabase.from('posts').insert({
       user_id: user.id,
       content: content.trim(),
       topic: composerMode === 'free' ? freeTopic : 'general',
       is_question_response: composerMode === 'question',
-    }).select('*, profiles(display_name, username)').single()
+    }).select()
+    if (error) {
+      console.error('Submit error:', error)
+    }
     if (data) {
-      setPosts(prev => [data as Post, ...prev])
-      setTotalToday(prev => prev + 1)
+      loadPosts()
       composerMode === 'free' ? setFreeText('') : setQuestionText('')
     }
     setPosting(false)
@@ -175,14 +190,14 @@ export default function Home() {
     const post = posts.find(p => p.id === postId)
     if (!post) return
     const key = `${type}_count` as 'same_count' | 'damn_count'
-    if (post.user_reaction === type) {
+    if ((post as any).user_reaction === type) {
       await supabase.from('reactions').delete().eq('post_id', postId).eq('user_id', user.id).eq('reaction_type', type)
-      await supabase.from('posts').update({ [key]: Math.max(0, post[key] - 1) }).eq('id', postId)
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, [key]: Math.max(0, p[key] - 1), user_reaction: null } : p))
+      await supabase.from('posts').update({ [key]: Math.max(0, (post[key] as number) - 1) }).eq('id', postId)
+      loadPosts()
     } else {
       await supabase.from('reactions').upsert({ post_id: postId, user_id: user.id, reaction_type: type })
-      await supabase.from('posts').update({ [key]: post[key] + 1 }).eq('id', postId)
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, [key]: p[key] + 1, user_reaction: type } : p))
+      await supabase.from('posts').update({ [key]: (post[key] as number) + 1 }).eq('id', postId)
+      loadPosts()
     }
   }
 
@@ -206,7 +221,7 @@ export default function Home() {
     if (data) {
       setReplies(prev => ({ ...prev, [postId]: [...(prev[postId] || []), data as Reply] }))
       setReplyInputs(prev => ({ ...prev, [postId]: '' }))
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, reply_count: p.reply_count + 1 } : p))
+      loadPosts()
     }
   }
 
@@ -260,6 +275,10 @@ export default function Home() {
     groupC: { fontSize: 11, color: 'var(--text-muted)' },
     overlay: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99, padding: 20 },
     modal: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 32, maxWidth: 360, width: '100%' },
+  }
+
+  if (!hasCheckedUsername) {
+    return null
   }
 
   return (
@@ -321,7 +340,7 @@ export default function Home() {
 
           <div style={c.feed}>
             {posts.length === 0 && <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 14 }}>no posts yet. be the first.</div>}
-            {posts.map(post => (
+            {posts.map((post: any) => (
               <div key={post.id} style={c.post}>
                 <div style={c.postMeta}>
                   <span style={c.postId}>{post.profiles?.display_name || post.profiles?.username} · {timeAgo(post.created_at)}</span>
@@ -329,10 +348,10 @@ export default function Home() {
                 </div>
                 <div style={c.postBody}>{post.content}</div>
                 <div style={c.postActions}>
-                  <button style={c.react(post.user_reaction === 'same')} onClick={() => toggleReaction(post.id, 'same')}>
+                  <button style={c.react((post as any).user_reaction === 'same')} onClick={() => toggleReaction(post.id, 'same')}>
                     <span>same</span><span style={{ fontWeight: 600 }}>{post.same_count}</span>
                   </button>
-                  <button style={c.react(post.user_reaction === 'damn')} onClick={() => toggleReaction(post.id, 'damn')}>
+                  <button style={c.react((post as any).user_reaction === 'damn')} onClick={() => toggleReaction(post.id, 'damn')}>
                     <span>damn</span><span style={{ fontWeight: 600 }}>{post.damn_count}</span>
                   </button>
                   <button style={c.replyToggle} onClick={() => toggleReplies(post.id)}>reply · {post.reply_count}</button>
@@ -396,7 +415,7 @@ export default function Home() {
       )}
 
       {showUsernameModal && (
-        <div style={c.overlay} onClick={e => e.target === e.currentTarget && setShowUsernameModal(false)}>
+        <div style={c.overlay}>
           <div style={c.modal}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>choose a username</div>
             <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>what should we call you?</div>
