@@ -40,7 +40,7 @@ export default function Home() {
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
   const [showModal, setShowModal] = useState(false)
   const [showUsernameModal, setShowUsernameModal] = useState(false)
-  const [tempUsername, setTempUsername] = useState('')
+  const [usernameInput, setUsernameInput] = useState('')
   const [usernameError, setUsernameError] = useState('')
   const [posting, setPosting] = useState(false)
   const [totalToday, setTotalToday] = useState(0)
@@ -48,10 +48,16 @@ export default function Home() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setUser(data.user)
+      if (data.user) {
+        setUser(data.user)
+        checkUsername(data.user.id)
+      }
     })
     supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null)
+      if (session?.user) {
+        checkUsername(session.user.id)
+      }
     })
     loadPosts()
     loadQuestion()
@@ -61,58 +67,39 @@ export default function Home() {
     loadPosts()
   }, [topic, sort, search])
 
-  useEffect(() => {
-    if (user) {
-      checkUsername()
-    }
-  }, [user])
-
-  async function checkUsername() {
-    if (!user) return
+  async function checkUsername(userId: string) {
     const { data } = await supabase
       .from('profiles')
       .select('username')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single()
     if (!data?.username) {
       setNeedsUsername(true)
       setShowUsernameModal(true)
-    } else {
-      setNeedsUsername(false)
     }
   }
 
   async function saveUsername() {
-    if (!tempUsername.trim()) {
+    if (!usernameInput.trim()) {
       setUsernameError('Username cannot be empty')
       return
     }
-    if (!/^[a-zA-Z0-9]+$/.test(tempUsername)) {
-      setUsernameError('Use only letters and numbers')
-      return
-    }
-    if (tempUsername.length < 3 || tempUsername.length > 20) {
+    const clean = usernameInput.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
+    if (clean.length < 3 || clean.length > 20) {
       setUsernameError('Username must be 3-20 characters')
       return
     }
-
     const { error } = await supabase
       .from('profiles')
-      .update({ username: tempUsername.toLowerCase() })
-      .eq('id', user?.id)
-
+      .upsert({ id: user!.id, username: clean })
     if (error) {
-      if (error.code === '23505') {
-        setUsernameError('Username already taken')
-      } else {
-        setUsernameError('Something went wrong')
-      }
+      if (error.code === '23505') setUsernameError('Username already taken')
+      else setUsernameError('Something went wrong')
       return
     }
-
     setShowUsernameModal(false)
     setNeedsUsername(false)
-    setTempUsername('')
+    setUsernameInput('')
     setUsernameError('')
   }
 
@@ -126,23 +113,23 @@ export default function Home() {
     let query = supabase
       .from('posts')
       .select('*, profiles(username)')
-    
+
     if (topic !== 'all') query = query.eq('topic', topic)
     if (search) query = query.ilike('content', `%${search}%`)
-    
+
     if (sort === 'top') {
       query = query.order('same_count', { ascending: false })
     } else {
       query = query.order('created_at', { ascending: false })
     }
-    
+
     const { data, error } = await query
 
     if (error) {
       console.error('Error loading posts:', error)
       return
     }
-    
+
     if (data) {
       setPosts(data as Post[])
       setTotalToday(data.length)
@@ -150,7 +137,10 @@ export default function Home() {
   }
 
   async function signInWithGoogle() {
-    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin + '/setup' }
+    })
   }
 
   async function submitPost() {
@@ -165,7 +155,7 @@ export default function Home() {
       topic: composerMode === 'free' ? freeTopic : 'general',
       is_question_response: composerMode === 'question',
     })
-    loadPosts()
+    await loadPosts()
     composerMode === 'free' ? setFreeText('') : setQuestionText('')
     setPosting(false)
   }
@@ -175,7 +165,7 @@ export default function Home() {
     const post = posts.find(p => p.id === postId)
     if (!post) return
     const key = `${type}_count` as 'same_count' | 'damn_count'
-    
+
     if ((post as any).user_reaction === type) {
       await supabase.from('reactions').delete().eq('post_id', postId).eq('user_id', user.id).eq('reaction_type', type)
       await supabase.from('posts').update({ [key]: Math.max(0, (post[key] as number) - 1) }).eq('id', postId)
@@ -183,7 +173,7 @@ export default function Home() {
       await supabase.from('reactions').upsert({ post_id: postId, user_id: user.id, reaction_type: type })
       await supabase.from('posts').update({ [key]: (post[key] as number) + 1 }).eq('id', postId)
     }
-    loadPosts()
+    await loadPosts()
   }
 
   async function toggleReplies(postId: string) {
@@ -204,7 +194,7 @@ export default function Home() {
     if (!content) return
     await supabase.from('replies').insert({ post_id: postId, user_id: user.id, content })
     setReplyInputs(prev => ({ ...prev, [postId]: '' }))
-    loadPosts()
+    await loadPosts()
     const { data } = await supabase.from('replies').select('*, profiles(username)').eq('post_id', postId).order('created_at')
     if (data) setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
   }
@@ -239,7 +229,7 @@ export default function Home() {
     postTag: { fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 4, background: 'var(--surface3)', color: 'var(--text-dim)', letterSpacing: '0.05em', textTransform: 'uppercase' as const },
     postBody: { fontSize: 14, lineHeight: 1.7, color: 'var(--text)', marginBottom: 14 },
     postActions: { display: 'flex', gap: 6, alignItems: 'center' },
-    react: (on: boolean) => ({ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 6, border: on ? '1px solid rgba(91,106,240,0.3)' : '1px solid var(--border)', background: on ? 'var(--accent-dim)' : 'none', color: on ? 'var(--accent)' : 'var(--text-muted)', fontSize: 12, fontWeight: 500, cursor: 'pointer' }),
+    react: (on: boolean) => ({ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 6, border: on ? '1px solid rgba(172,60,43,0.3)' : '1px solid var(--border)', background: on ? 'rgba(172,60,43,0.15)' : 'none', color: on ? 'var(--accent)' : 'var(--text-muted)', fontSize: 12, fontWeight: 500, cursor: 'pointer' }),
     replyToggle: { marginLeft: 'auto', padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'none', color: 'var(--text-muted)', fontSize: 12, fontWeight: 500, cursor: 'pointer' },
     repliesWrap: { marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column' as const, gap: 8 },
     replyItem: { background: 'var(--surface2)', borderRadius: 6, padding: '10px 14px' },
@@ -250,13 +240,15 @@ export default function Home() {
     sidebar: { display: 'flex', flexDirection: 'column' as const, gap: 20 },
     scardTitle: { fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: 'var(--text-muted)', marginBottom: 10 },
     aboutP: { fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.65, marginBottom: 5 },
-    divider: { height: 1, background: 'var(--border)', margin: '3px 0 14px' },
+    divider: { height: 1, background: 'var(--border)', margin: '6px 0 12px' },
     statR: { display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' },
     statL: { fontSize: 12, color: 'var(--text-muted)' },
     statV: { fontSize: 14, fontWeight: 700, color: 'var(--text)' },
     groupR: (on: boolean) => ({ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 8px', borderRadius: 6, cursor: 'pointer', background: on ? 'var(--surface2)' : 'none' }),
     groupN: (on: boolean) => ({ fontSize: 13, color: on ? 'var(--text)' : 'var(--text-dim)', fontWeight: on ? 500 : 400 }),
     groupC: { fontSize: 11, color: 'var(--text-muted)' },
+    footerLinks: { display: 'flex', flexWrap: 'wrap' as const, gap: 16, marginTop: 12, fontSize: 11, color: 'var(--text-muted)' },
+    link: { color: 'var(--text-dim)', textDecoration: 'none', ':hover': { color: 'var(--accent)' } },
     overlay: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99, padding: 20 },
     modal: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 32, maxWidth: 360, width: '100%' },
   }
@@ -323,7 +315,7 @@ export default function Home() {
             {posts.map((post: any) => (
               <div key={post.id} style={c.post}>
                 <div style={c.postMeta}>
-                  <span style={c.postId}>{post.post.profiles?.username || 'anonymous'} · {timeAgo(post.created_at)}</span>
+                  <span style={c.postId}>{post.profiles?.username} · {timeAgo(post.created_at)}</span>
                   <span style={c.postTag}>{post.topic}</span>
                 </div>
                 <div style={c.postBody}>{post.content}</div>
@@ -340,7 +332,7 @@ export default function Home() {
                   <div style={c.repliesWrap}>
                     {(replies[post.id] || []).map(r => (
                       <div key={r.id} style={c.replyItem}>
-                        <div style={c.replyWho}>{r.profiles?.username || 'anonymous'}</div>
+                        <div style={c.replyWho}>{r.profiles?.username}</div>
                         <div style={c.replyText}>{r.content}</div>
                       </div>
                     ))}
@@ -377,6 +369,16 @@ export default function Home() {
               </div>
             ))}
           </div>
+          <div>
+            <div style={c.scardTitle}>info</div>
+            <div style={c.divider} />
+            <div style={c.footerLinks}>
+              <a href="/privacy" style={c.link}>privacy</a>
+              <a href="/terms" style={c.link}>terms</a>
+              <a href="/contact" style={c.link}>contact</a>
+              <span style={{ color: 'var(--text-muted)' }}>© 2026 off record</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -400,14 +402,14 @@ export default function Home() {
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>choose a username</div>
             <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>what should we call you?</div>
             <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 20, lineHeight: 1.6 }}>
-              letters and numbers only.<br />
-              like `alex92` or `chicagodad`
+              letters, numbers, dots, dashes, underscores.<br />
+              like `alex92` or `chicago_dad`
             </div>
             <input
               style={{ ...c.textarea, minHeight: 44, marginBottom: 12 }}
               placeholder="username"
-              value={tempUsername}
-              onChange={e => setTempUsername(e.target.value.toLowerCase())}
+              value={usernameInput}
+              onChange={e => setUsernameInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && saveUsername()}
             />
             {usernameError && <div style={{ color: '#ff6b6b', fontSize: 12, marginBottom: 12 }}>{usernameError}</div>}
