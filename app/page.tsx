@@ -41,9 +41,6 @@ export default function Home() {
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
   const [replyingTo, setReplyingTo] = useState<Record<string, string | null>>({})
   const [showModal, setShowModal] = useState(false)
-  const [showUsernameModal, setShowUsernameModal] = useState(false)
-  const [usernameInput, setUsernameInput] = useState('')
-  const [usernameError, setUsernameError] = useState('')
   const [posting, setPosting] = useState(false)
   const [totalToday, setTotalToday] = useState(0)
   const [offset, setOffset] = useState(0)
@@ -51,20 +48,14 @@ export default function Home() {
   const PAGE_SIZE = 20
 
   useEffect(() => {
-    async function checkUser(u: any) {
-      setUser(u)
-      if (!u) return
-      const { data: profile } = await supabase.from('profiles').select('username').eq('id', u.id).single()
-      if (!profile?.username) setShowUsernameModal(true)
-    }
-    supabase.auth.getUser().then(({ data }) => checkUser(data.user))
-    supabase.auth.onAuthStateChange((_, session) => checkUser(session?.user ?? null))
+    supabase.auth.getUser().then(({ data }) => setUser(data.user))
+    supabase.auth.onAuthStateChange((_, session) => setUser(session?.user ?? null))
     loadQuestion()
     loadPosts(0)
   }, [])
 
   useEffect(() => { setOffset(0); setPosts([]); setHasMore(true) }, [topic, sort, search])
-  useEffect(() => { loadPosts(0) }, [topic, sort, search])
+  useEffect(() => { if (offset === 0 && posts.length === 0) loadPosts(0) }, [offset, posts.length])
 
   async function loadQuestion() {
     const today = new Date().toISOString().split('T')[0]
@@ -92,18 +83,6 @@ export default function Home() {
 
   async function signInWithGoogle() {
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
-  }
-
-  async function saveUsername() {
-    const u = usernameInput.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
-    if (!u || u.length < 2) { setUsernameError('at least 2 characters'); return }
-    if (u.length > 20) { setUsernameError('max 20 characters'); return }
-    const { error } = await supabase.from('profiles').upsert({ id: user!.id, username: u })
-    if (error?.code === '23505') { setUsernameError('already taken, try another'); return }
-    if (error) { setUsernameError('something went wrong'); return }
-    setShowUsernameModal(false)
-    setUsernameInput('')
-    setUsernameError('')
   }
 
   async function submitPost() {
@@ -349,28 +328,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-
-      {showUsernameModal && (
-        <div style={{ position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: '40px 36px', maxWidth: 360, width: '100%' }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', marginBottom: 12 }}>one last thing.</div>
-            <div style={{ fontSize: 20, fontWeight: 300, marginBottom: 8, color: 'var(--text)' }}>choose your name.</div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.6 }}>this is how you appear. no real name. ever.</div>
-            <input
-              style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', padding: '10px 12px', color: 'var(--text)', fontSize: 13, outline: 'none', marginBottom: 8, fontFamily: 'var(--mono)' }}
-              placeholder="e.g. coldstatic, ryan1987, drifting42"
-              value={usernameInput}
-              onChange={e => { setUsernameInput(e.target.value); setUsernameError('') }}
-              onKeyDown={e => e.key === 'Enter' && saveUsername()}
-              autoFocus
-            />
-            {usernameError && <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', marginBottom: 8 }}>{usernameError}</div>}
-            <button onClick={saveUsername} style={{ width: '100%', background: 'var(--accent)', border: 'none', padding: '10px', color: '#fff', fontSize: 11, fontFamily: 'var(--mono)', letterSpacing: '0.1em', cursor: 'pointer' }}>
-              set name
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Modal */}
       {showModal && (
