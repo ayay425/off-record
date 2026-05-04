@@ -58,7 +58,7 @@ export default function Home() {
   useEffect(() => { if (offset === 0 && posts.length === 0) loadPosts(0) }, [offset, posts.length])
 
   async function loadQuestion() {
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })
+    const today = new Date().toISOString().split('T')[0]
     const { data } = await supabase.from('daily_questions').select('*').eq('date', today).single()
     if (data) setQuestion(data)
   }
@@ -323,7 +323,7 @@ export default function Home() {
               {[['privacy', '/privacy'], ['terms', '/terms'], ['contact', 'mailto:hello@off-record.app']].map(([label, href]) => (
                 <a key={label} href={href} style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-muted)', textDecoration: 'none' }}>{label}</a>
               ))}
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>© 2026</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>© 2025</span>
             </div>
           </div>
         </div>
