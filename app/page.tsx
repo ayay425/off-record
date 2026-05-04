@@ -56,7 +56,7 @@ export default function Home() {
     async function checkUser(u: User | null) {
       setUser(u)
       if (!u) return
-      const { data: profile } = await supabase.from('profiles').select('username').eq('id', u.id).single()
+      const { data: profile } = await supabase.from('profiles').select('username').eq('id', u.id).maybeSingle()
       if (!profile || !profile.username) setShowUsernameModal(true)
     }
     supabase.auth.getUser().then(({ data }) => checkUser(data.user))
