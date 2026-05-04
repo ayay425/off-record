@@ -71,7 +71,7 @@ export default function Home() {
     if (!user) return
     const { data } = await supabase
       .from('profiles')
-      .select('display_name')
+      .select('username')
       .eq('id', user.id)
       .single()
     if (!data?.display_name) {
@@ -98,7 +98,7 @@ export default function Home() {
 
     const { error } = await supabase
       .from('profiles')
-      .update({ display_name: tempUsername.toLowerCase() })
+      .update({ username: tempUsername.toLowerCase() })
       .eq('id', user?.id)
 
     if (error) {
@@ -125,10 +125,9 @@ export default function Home() {
   async function loadPosts() {
     let query = supabase
       .from('posts')
-      .select(`
+      .select(
         *,
         profiles (
-          display_name,
           username
         )
       `)
@@ -197,7 +196,7 @@ export default function Home() {
     if (next.has(postId)) { next.delete(postId) } else {
       next.add(postId)
       if (!replies[postId]) {
-        const { data } = await supabase.from('replies').select('*, profiles(display_name, username)').eq('post_id', postId).order('created_at')
+        const { data } = await supabase.from('replies').select('*, profiles(username)').eq('post_id', postId).order('created_at')
         if (data) setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
       }
     }
@@ -211,7 +210,7 @@ export default function Home() {
     await supabase.from('replies').insert({ post_id: postId, user_id: user.id, content })
     setReplyInputs(prev => ({ ...prev, [postId]: '' }))
     loadPosts()
-    const { data } = await supabase.from('replies').select('*, profiles(display_name, username)').eq('post_id', postId).order('created_at')
+    const { data } = await supabase.from('replies').select('*, profiles(username)').eq('post_id', postId).order('created_at')
     if (data) setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
   }
 
@@ -329,7 +328,7 @@ export default function Home() {
             {posts.map((post: any) => (
               <div key={post.id} style={c.post}>
                 <div style={c.postMeta}>
-                  <span style={c.postId}>{post.profiles?.display_name || post.profiles?.username || 'anonymous'} · {timeAgo(post.created_at)}</span>
+                  <span style={c.postId}>{post.post.profiles?.username || 'anonymous'} · {timeAgo(post.created_at)}</span>
                   <span style={c.postTag}>{post.topic}</span>
                 </div>
                 <div style={c.postBody}>{post.content}</div>
@@ -346,7 +345,7 @@ export default function Home() {
                   <div style={c.repliesWrap}>
                     {(replies[post.id] || []).map(r => (
                       <div key={r.id} style={c.replyItem}>
-                        <div style={c.replyWho}>{r.profiles?.display_name || r.profiles?.username || 'anonymous'}</div>
+                        <div style={c.replyWho}>{r.profiles?.username || 'anonymous'}</div>
                         <div style={c.replyText}>{r.content}</div>
                       </div>
                     ))}
