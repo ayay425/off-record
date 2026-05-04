@@ -70,7 +70,7 @@ export default function Home() {
       .eq('id', userId)
       .single()
     
-    if (!data?.display_name) {
+    if (!data?.display_name && !showUsernameModal) {
       setShowUsernameModal(true)
     }
   }
@@ -106,7 +106,6 @@ export default function Home() {
     setShowUsernameModal(false)
     setTempUsername('')
     setUsernameError('')
-    window.location.reload()
   }
 
   async function loadQuestion() {
