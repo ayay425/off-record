@@ -115,19 +115,33 @@ export default function Home() {
   }
 
   async function loadPosts() {
-    let query = supabase.from('posts').select('*')
+    let query = supabase
+      .from('posts')
+      .select(`
+        *,
+        profiles (
+          display_name,
+          username
+        )
+      `)
+    
     if (topic !== 'all') query = query.eq('topic', topic)
     if (search) query = query.ilike('content', `%${search}%`)
-    query = sort === 'top'
-      ? query.order('same_count', { ascending: false })
-      : query.order('created_at', { ascending: false })
     
-    const { data, error } = await query.limit(200)
+    if (sort === 'top') {
+      query = query.order('same_count', { ascending: false })
+    } else {
+      query = query.order('created_at', { ascending: false })
+    }
+    
+    const { data, error } = await query
+
     if (error) {
       console.error('Error loading posts:', error)
       return
     }
-    if (data) { 
+    
+    if (data) {
       setPosts(data as Post[])
       setTotalToday(data.length)
     }
@@ -147,7 +161,7 @@ export default function Home() {
       content: content.trim(),
       topic: composerMode === 'free' ? freeTopic : 'general',
       is_question_response: composerMode === 'question',
-    }).select('*').single()
+    }).select('*, profiles(display_name, username)').single()
     if (data) {
       setPosts(prev => [data as Post, ...prev])
       setTotalToday(prev => prev + 1)
@@ -177,7 +191,7 @@ export default function Home() {
     if (next.has(postId)) { next.delete(postId) } else {
       next.add(postId)
       if (!replies[postId]) {
-        const { data } = await supabase.from('replies').select('*').eq('post_id', postId).order('created_at')
+        const { data } = await supabase.from('replies').select('*, profiles(display_name, username)').eq('post_id', postId).order('created_at')
         if (data) setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
       }
     }
@@ -188,7 +202,7 @@ export default function Home() {
     if (!user) { setShowModal(true); return }
     const content = replyInputs[postId]?.trim()
     if (!content) return
-    const { data } = await supabase.from('replies').insert({ post_id: postId, user_id: user.id, content }).select('*').single()
+    const { data } = await supabase.from('replies').insert({ post_id: postId, user_id: user.id, content }).select('*, profiles(display_name, username)').single()
     if (data) {
       setReplies(prev => ({ ...prev, [postId]: [...(prev[postId] || []), data as Reply] }))
       setReplyInputs(prev => ({ ...prev, [postId]: '' }))
@@ -310,7 +324,7 @@ export default function Home() {
             {posts.map(post => (
               <div key={post.id} style={c.post}>
                 <div style={c.postMeta}>
-                  <span style={c.postId}>anonymous · {timeAgo(post.created_at)}</span>
+                  <span style={c.postId}>{post.profiles?.display_name || post.profiles?.username} · {timeAgo(post.created_at)}</span>
                   <span style={c.postTag}>{post.topic}</span>
                 </div>
                 <div style={c.postBody}>{post.content}</div>
@@ -327,7 +341,7 @@ export default function Home() {
                   <div style={c.repliesWrap}>
                     {(replies[post.id] || []).map(r => (
                       <div key={r.id} style={c.replyItem}>
-                        <div style={c.replyWho}>anonymous</div>
+                        <div style={c.replyWho}>{r.profiles?.display_name || r.profiles?.username}</div>
                         <div style={c.replyText}>{r.content}</div>
                       </div>
                     ))}
