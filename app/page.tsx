@@ -51,35 +51,36 @@ export default function Home() {
   const PAGE_SIZE = 20
 
   useEffect(() => {
-    async function checkUser(u: any) {
+    loadQuestion()
+    loadPosts(0, 'all', 'top', '')
+    async function checkUser(u: User | null) {
       setUser(u)
       if (!u) return
       const { data: profile } = await supabase.from('profiles').select('username').eq('id', u.id).single()
       if (!profile || !profile.username) setShowUsernameModal(true)
     }
-    supabase.auth.getSession().then(({ data: { session } }) => checkUser(session?.user ?? null))
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') checkUser(session?.user ?? null)
-      if (event === 'SIGNED_OUT') setUser(null)
-    })
-    loadQuestion()
-    loadPosts(0)
+    supabase.auth.getUser().then(({ data }) => checkUser(data.user))
+    supabase.auth.onAuthStateChange((_, session) => checkUser(session?.user ?? null))
   }, [])
 
-  useEffect(() => { setOffset(0); setPosts([]); setHasMore(true) }, [topic, sort, search])
-  useEffect(() => { if (offset === 0 && posts.length === 0) loadPosts(0) }, [offset, posts.length])
+  useEffect(() => {
+    setPosts([])
+    setOffset(0)
+    setHasMore(true)
+    loadPosts(0, topic, sort, search)
+  }, [topic, sort, search])
 
   async function loadQuestion() {
-    const today = new Date().toISOString().split('T')[0]
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })
     const { data } = await supabase.from('daily_questions').select('*').eq('date', today).single()
     if (data) setQuestion(data)
   }
 
-  async function loadPosts(off: number) {
+  async function loadPosts(off: number, t: Topic, s: string, q: string) {
     let query = supabase.from('posts').select('*, profiles(username)')
-    if (topic !== 'all') query = query.eq('topic', topic)
-    if (search) query = query.ilike('content', `%${search}%`)
-    query = sort === 'top'
+    if (t !== 'all') query = query.eq('topic', t)
+    if (q) query = query.ilike('content', `%${q}%`)
+    query = s === 'top'
       ? query.order('same_count', { ascending: false })
       : query.order('created_at', { ascending: false })
     const { data } = await query.range(off, off + PAGE_SIZE - 1)
@@ -91,7 +92,7 @@ export default function Home() {
     }
   }
 
-  async function loadMore() { loadPosts(offset) }
+  async function loadMore() { loadPosts(offset, topic, sort, search) }
 
   async function signInWithGoogle() {
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
@@ -171,10 +172,8 @@ export default function Home() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-
-      {/* Topbar */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '0 32px', height: 48, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky' as const, top: 0, zIndex: 10, background: 'var(--bg)' }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 500, letterSpacing: '0.02em', color: 'var(--text)' }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>
           off record<span style={{ color: 'var(--accent)' }}>.</span>
         </div>
         <input
@@ -195,18 +194,12 @@ export default function Home() {
       </div>
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 32px', display: 'grid', gridTemplateColumns: '1fr 200px', gap: 64 }}>
-
-        {/* Main */}
         <div>
-          {/* Hero */}
           <div style={{ marginBottom: 40, paddingBottom: 32, borderBottom: '1px solid var(--border)' }}>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.12em', marginBottom: 16, textTransform: 'uppercase' as const }}>off record</div>
-            <h1 style={{ fontSize: 48, fontWeight: 300, lineHeight: 1.05, color: 'var(--text)', letterSpacing: '-0.02em' }}>
-              say the thing.
-            </h1>
+            <h1 style={{ fontSize: 48, fontWeight: 300, lineHeight: 1.05, color: 'var(--text)', letterSpacing: '-0.02em' }}>say the thing.</h1>
           </div>
 
-          {/* Composer */}
           <div style={{ marginBottom: 40, paddingBottom: 32, borderBottom: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid var(--border)' }}>
               {(['free', 'question'] as const).map(mode => (
@@ -215,13 +208,11 @@ export default function Home() {
                 </button>
               ))}
             </div>
-
             {composerMode === 'question' && question && (
               <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)', marginBottom: 16, lineHeight: 1.6, padding: '12px 16px', background: 'var(--surface2)', borderLeft: '2px solid var(--accent)' }}>
                 {question.question}
               </div>
             )}
-
             <textarea
               style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', padding: '12px 14px', color: 'var(--text)', fontSize: 14, resize: 'none', minHeight: 80, outline: 'none', lineHeight: 1.7, fontWeight: 300 }}
               placeholder="say it."
@@ -240,7 +231,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Feed controls */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>{totalToday} posts</span>
             <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border)' }}>
@@ -252,19 +242,14 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Posts */}
-          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column' as const }}>
             {posts.map(post => (
               <div key={post.id} style={{ padding: '24px 0', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-muted)' }}>{post.profiles?.username} · {timeAgo(post.created_at)}</span>
                   <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--accent)', letterSpacing: '0.06em' }}>{post.topic}</span>
                 </div>
-
-                <div style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text)', marginBottom: 16, fontWeight: 300 }}>
-                  {post.content}
-                </div>
-
+                <div style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text)', marginBottom: 16, fontWeight: 300 }}>{post.content}</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {(['same', 'damn'] as const).map(type => (
                     <button key={type} onClick={() => toggleReaction(post.id, type)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 10px', border: post.user_reaction === type ? '1px solid var(--accent)' : '1px solid var(--border)', background: post.user_reaction === type ? 'var(--accent-dim)' : 'none', color: post.user_reaction === type ? 'var(--accent)' : 'var(--text-muted)', fontSize: 10, fontFamily: 'var(--mono)', cursor: 'pointer' }}>
@@ -275,7 +260,6 @@ export default function Home() {
                     {expandedReplies.has(post.id) ? 'hide' : `${post.reply_count} replies`}
                   </button>
                 </div>
-
                 {expandedReplies.has(post.id) && (
                   <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                     <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 16, marginBottom: 16 }}>
@@ -303,7 +287,6 @@ export default function Home() {
                 )}
               </div>
             ))}
-
             {hasMore && (
               <button onClick={loadMore} style={{ width: '100%', padding: '16px', background: 'none', border: 'none', borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.1em', cursor: 'pointer' }}>
                 load more
@@ -312,18 +295,14 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Sidebar */}
         <div>
           <div style={{ position: 'sticky' as const, top: 64, display: 'flex', flexDirection: 'column' as const, gap: 36 }}>
             <div>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase' as const }}>about</div>
               <p style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.8, marginBottom: 4, fontWeight: 300 }}>A space for men to say the things they never say out loud.</p>
               <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 16, fontWeight: 300 }}>Everyone&apos;s welcome to sit with it.</p>
-              <button onClick={() => setShowModal(true)} style={{ width: '100%', background: 'var(--accent)', border: 'none', padding: '8px', color: '#fff', fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.1em', cursor: 'pointer' }}>
-                join
-              </button>
+              <button onClick={() => setShowModal(true)} style={{ width: '100%', background: 'var(--accent)', border: 'none', padding: '8px', color: '#fff', fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.1em', cursor: 'pointer' }}>join</button>
             </div>
-
             <div>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase' as const }}>today</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
@@ -331,7 +310,6 @@ export default function Home() {
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--text)' }}>{totalToday}</span>
               </div>
             </div>
-
             <div>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase' as const }}>topics</div>
               <div style={{ display: 'flex', flexDirection: 'column' as const }}>
@@ -342,7 +320,6 @@ export default function Home() {
                 ))}
               </div>
             </div>
-
             <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
               {[['privacy', '/privacy'], ['terms', '/terms'], ['contact', 'mailto:hello@off-record.app']].map(([label, href]) => (
                 <a key={label} href={href} style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-muted)', textDecoration: 'none' }}>{label}</a>
@@ -353,7 +330,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Modal */}
       {showUsernameModal && (
         <div style={{ position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: '40px 36px', maxWidth: 360, width: '100%' }}>
