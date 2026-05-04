@@ -8,30 +8,44 @@ export default function Setup() {
   const router = useRouter()
   const [username, setUsername] = useState('')
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [ready, setReady] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) { router.push('/'); return }
-      const { data: profile } = await supabase.from('profiles').select('username').eq('id', data.user.id).maybeSingle()
-      if (profile?.username) { router.push('/'); return }
-      setLoading(false)
+    // onAuthStateChange fires reliably after OAuth redirect with code in URL
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!session?.user) return
+      setUserId(session.user.id)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', session.user.id)
+        .maybeSingle()
+      if (profile?.username) {
+        router.push('/')
+      } else {
+        setReady(true)
+      }
     })
+    return () => subscription.unsubscribe()
   }, [])
 
   async function save() {
+    if (!userId) return
     const u = username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
     if (!u || u.length < 2) { setError('at least 2 characters'); return }
     if (u.length > 20) { setError('max 20 characters'); return }
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { error: err } = await supabase.from('profiles').upsert({ id: user.id, username: u })
+    const { error: err } = await supabase.from('profiles').upsert({ id: userId, username: u })
     if (err?.code === '23505') { setError('already taken'); return }
     if (err) { setError('something went wrong'); return }
     router.push('/')
   }
 
-  if (loading) return <div style={{ minHeight: '100vh', background: '#0c0c0c' }} />
+  if (!ready) return (
+    <div style={{ minHeight: '100vh', background: '#0c0c0c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#484848' }}>loading...</div>
+    </div>
+  )
 
   return (
     <div style={{ minHeight: '100vh', background: '#0c0c0c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
