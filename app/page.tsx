@@ -59,7 +59,7 @@ export default function Home() {
       const { data: profile } = await supabase.from('profiles').select('username').eq('id', u.id).maybeSingle()
       if (!profile || !profile.username) setShowUsernameModal(true)
     }
-    supabase.auth.getUser().then(({ data }) => checkUser(data.user))
+    supabase.auth.getSession().then(({ data: { session } }) => checkUser(session?.user ?? null))
     supabase.auth.onAuthStateChange((_, session) => checkUser(session?.user ?? null))
   }, [])
 
