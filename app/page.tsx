@@ -41,44 +41,41 @@ export default function Home() {
   const [showModal, setShowModal] = useState(false)
   const [posting, setPosting] = useState(false)
   const [totalToday, setTotalToday] = useState(0)
-  const [showUsernameModal, setShowUsernameModal] = useState(false)
-  const [tempUsername, setTempUsername] = useState('')
-  const [usernameError, setUsernameError] = useState('')
+  const [showUsernamePopup, setShowUsernamePopup] = useState(false)
 
   // Force popup on login
   useEffect(() => {
     if (user) {
-      setShowUsernameModal(true)
+      setShowUsernamePopup(true)
     }
   }, [user])
 
-  async function saveUsername() {
-    const clean = tempUsername.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
-    if (!clean) {
-      setUsernameError('Username cannot be empty')
-      return
+  const UsernameModal = ({ onClose }: { onClose: () => void }) => {
+    const [username, setUsername] = useState('')
+    const [error, setError] = useState('')
+    const handleSave = async () => {
+      const clean = username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
+      if (!clean) return setError('Username cannot be empty')
+      if (clean.length < 3 || clean.length > 20) return setError('Username must be 3-20 characters')
+      const { error: saveError } = await supabase
+        .from('profiles')
+        .upsert({ id: user!.id, username: clean })
+      if (saveError?.code === '23505') setError('Username already taken')
+      else if (saveError) setError('Something went wrong')
+      else onClose()
     }
-    if (clean.length < 3 || clean.length > 20) {
-      setUsernameError('Username must be 3-20 characters')
-      return
-    }
-    
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({ id: user!.id, username: clean })
-    
-    if (error) {
-      if (error.code === '23505') {
-        setUsernameError('Username already taken')
-      } else {
-        setUsernameError('Something went wrong')
-      }
-      return
-    }
-    
-    setShowUsernameModal(false)
-    setTempUsername('')
-    setUsernameError('')
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+        <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 12, padding: 32, maxWidth: 360, width: '100%' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', marginBottom: 10, color: '#888' }}>choose a username</div>
+          <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: '#fff' }}>what should we call you?</div>
+          <div style={{ fontSize: 13, marginBottom: 20, lineHeight: 1.6, color: '#aaa' }}>letters, numbers, dots, dashes, underscores. <br />like `alex92` or `chicago_dad`</div>
+          <input style={{ width: '100%', background: '#2a2a2a', border: '1px solid #444', borderRadius: 6, padding: '10px 14px', color: '#fff', marginBottom: 12 }} placeholder="username" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} />
+          {error && <div style={{ color: '#ff6b6b', marginBottom: 12 }}>{error}</div>}
+          <button style={{ width: '100%', padding: 12, background: '#ac2b1f', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer' }} onClick={handleSave}>continue</button>
+        </div>
+      </div>
+    )
   }
 
   useEffect(() => {
@@ -104,12 +101,14 @@ export default function Home() {
     let query = supabase.from('posts').select('*, profiles(username)')
     if (topic !== 'all') query = query.eq('topic', topic)
     if (search) query = query.ilike('content', `%${search}%`)
-    query = sort === 'top'
-      ? query.order('same_count', { ascending: false })
-      : query.order('created_at', { ascending: false })
+    if (sort === 'top') query = query.order('same_count', { ascending: false })
+    else query = query.order('created_at', { ascending: false })
     const { data, error } = await query
     if (error) console.error('Error loading posts:', error)
-    if (data) { setPosts(data as Post[]); setTotalToday(data.length) }
+    if (data) {
+      setPosts(data as Post[])
+      setTotalToday(data.length)
+    }
   }
 
   async function signInWithGoogle() {
@@ -152,7 +151,7 @@ export default function Home() {
     next.add(postId)
     setExpandedReplies(next)
     if (!replies[postId]) {
-      const { data } = await supabase.from('replies').select('*, profiles(username)').eq('post_id', postId).order('created_at')
+      const { data } = await supabase.from('replies').select('*, profiles(username)').eq('post_id', postId).order('created_at', { ascending: true })
       if (data) setReplies(prev => ({ ...prev, [postId]: data as Reply[] }))
     }
   }
@@ -407,28 +406,14 @@ export default function Home() {
           <div style={c.modal}>
             <div
               style={{
-                fontSize: 10,
+                fontSize: 42,
                 fontWeight: 700,
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                color: 'var(--text-muted)',
-                marginBottom: 10,
+                marginBottom: 32,
+                color: 'var(--text)',
+                textAlign: 'center',
               }}
             >
-              welcome
-            </div>
-            <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>
-              why are you here?
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                color: 'var(--text-dim)',
-                marginBottom: 20,
-                lineHeight: 1.6,
-              }}
-            >
-              no judgment. stays private.
+              welcome.
             </div>
             <button
               style={{
@@ -436,6 +421,7 @@ export default function Home() {
                 width: '100%',
                 padding: 12,
                 fontSize: 14,
+                fontWeight: 600,
                 borderRadius: 8,
                 marginBottom: 12,
               }}
@@ -443,40 +429,11 @@ export default function Home() {
             >
               continue with Google
             </button>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
-              no real name shown · ever
-            </div>
           </div>
         </div>
       )}
 
-      {showUsernameModal && (
-        <div style={c.overlay}>
-          <div style={c.modal}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>
-              choose a username
-            </div>
-            <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>
-              what should we call you?
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 20, lineHeight: 1.6 }}>
-              letters, numbers, dots, dashes, underscores.<br />
-              like `alex92` or `chicago_dad`
-            </div>
-            <input
-              style={{ ...c.textarea, minHeight: 44, marginBottom: 12 }}
-              placeholder="username"
-              value={tempUsername}
-              onChange={e => setTempUsername(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && saveUsername()}
-            />
-            {usernameError && <div style={{ color: '#ff6b6b', fontSize: 12, marginBottom: 12 }}>{usernameError}</div>}
-            <button style={{ ...c.btnPrimary, width: '100%', padding: 12 }} onClick={saveUsername}>
-              continue
-            </button>
-          </div>
-        </div>
-      )}
+      {showUsernamePopup && <UsernameModal onClose={() => setShowUsernamePopup(false)} />}
     </div>
   )
 }
