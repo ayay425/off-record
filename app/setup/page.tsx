@@ -12,22 +12,21 @@ export default function Setup() {
   const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    // onAuthStateChange fires reliably after OAuth redirect with code in URL
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!session?.user) return
-      setUserId(session.user.id)
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', session.user.id)
-        .maybeSingle()
-      if (profile?.username) {
-        router.push('/')
-      } else {
-        setReady(true)
-      }
+    async function checkSession(uid: string) {
+      setUserId(uid)
+      const { data: profile } = await supabase.from('profiles').select('username').eq('id', uid).maybeSingle()
+      if (profile?.username) { router.push('/'); return }
+      setReady(true)
+    }
+
+    // Try getSession first (instant if already logged in)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) { checkSession(session.user.id); return }
+      // Fall back to onAuthStateChange for fresh OAuth redirect
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (session?.user) { checkSession(session.user.id); subscription.unsubscribe() }
+      })
     })
-    return () => subscription.unsubscribe()
   }, [])
 
   async function save() {
@@ -43,7 +42,7 @@ export default function Setup() {
 
   if (!ready) return (
     <div style={{ minHeight: '100vh', background: '#0c0c0c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#484848' }}>loading...</div>
+      <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#484848', letterSpacing: '0.1em' }}>one moment.</div>
     </div>
   )
 
