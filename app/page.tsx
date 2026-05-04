@@ -125,12 +125,7 @@ export default function Home() {
   async function loadPosts() {
     let query = supabase
       .from('posts')
-      .select(
-        *,
-        profiles (
-          username
-        )
-      `)
+      .select('*, profiles(username)')
     
     if (topic !== 'all') query = query.eq('topic', topic)
     if (search) query = query.ilike('content', `%${search}%`)
